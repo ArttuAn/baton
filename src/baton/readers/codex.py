@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..model import Session, SessionRef, ToolCall, Turn
@@ -17,7 +17,7 @@ def root() -> Path:
 
 
 def _stamp(epoch: float) -> str:
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.fromtimestamp(epoch, tz=UTC).isoformat(timespec="seconds")
 
 
 def list_sessions(directory: str | None = None) -> list[SessionRef]:

@@ -25,6 +25,7 @@ def _git(directory: str, *args: str) -> str | None:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None

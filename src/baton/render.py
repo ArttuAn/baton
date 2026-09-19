@@ -10,7 +10,15 @@ HEADER_NOTE = (
 )
 
 
-def markdown(brief: Brief, *, transcript_path: str | None = None) -> str:
+def markdown(brief: Brief, *, transcript_path: str | None = None, minimal: bool = False) -> str:
+    """The handoff document.
+
+    `minimal` keeps only what the repository cannot tell the next agent itself:
+    the verbatim brief, why the session stopped, and what already failed. Files
+    changed and commands run are dropped — `git status` and `git diff` are more
+    accurate about those, and a short handoff gets read where a long one gets
+    skimmed.
+    """
     session = brief.session
     out: list[str] = []
     title = session.ref.title or (brief.asks[0].splitlines()[0] if brief.asks else "Session handoff")
@@ -18,28 +26,32 @@ def markdown(brief: Brief, *, transcript_path: str | None = None) -> str:
     out.append("")
     out.append(HEADER_NOTE)
     out.append("")
-    out.extend(_facts(brief))
+    out.extend(_facts(brief, minimal=minimal))
     out.extend(_asks(brief))
     out.extend(_stopped(brief))
-    out.extend(_plan(brief))
-    out.extend(_files(brief))
-    out.extend(_commands(brief))
+    if not minimal:
+        out.extend(_plan(brief))
+        out.extend(_files(brief))
+        out.extend(_commands(brief))
     out.extend(_failures(brief))
-    out.extend(_next_step(brief))
+    out.extend(_next_step(brief, minimal=minimal))
     out.extend(_transcript(brief, transcript_path))
     return "\n".join(out).rstrip() + "\n"
 
 
-def _facts(brief: Brief) -> list[str]:
+def _facts(brief: Brief, *, minimal: bool = False) -> list[str]:
     session, workspace = brief.session, brief.workspace
     rows = [
         ("Project", workspace.directory),
         ("Git", _git_line(brief)),
         ("Handed over by", f"{session.harness}" + (f" · {session.model}" if session.model else "")),
-        ("Source session", f"`{session.ref.id}`"),
-        ("Session ran", f"{session.started or '?'} → {session.ended or '?'}"),
-        ("Turns", str(len(session.turns))),
     ]
+    if not minimal:
+        rows += [
+            ("Source session", f"`{session.ref.id}`"),
+            ("Session ran", f"{session.started or '?'} → {session.ended or '?'}"),
+            ("Turns", str(len(session.turns))),
+        ]
     if brief.stopped_because:
         rows.append(("Stopped because", brief.stopped_because))
     lines = ["| | |", "|---|---|"]
@@ -137,17 +149,22 @@ def _failures(brief: Brief) -> list[str]:
     ]
 
 
-def _next_step(brief: Brief) -> list[str]:
+def _next_step(brief: Brief, *, minimal: bool = False) -> list[str]:
     out = ["## Next step", ""]
     if brief.asks:
         out.append(f"Pick up request #{len(brief.asks)} above. It is the live one.")
     else:
         out.append("Read 'Where it stopped' — that is the live thread.")
     out.append("")
+    first = (
+        "1. Run `git status` and `git diff` — the working tree is the record of what was done."
+        if minimal
+        else "1. Re-read the files under **Files this session changed** — they hold the work in progress."
+    )
     out += [
         "Before you touch anything:",
         "",
-        "1. Re-read the files under **Files this session changed** — they hold the work in progress.",
+        first,
         "2. Treat everything above as *already done*. Do not redo it; verify it if you doubt it.",
         "3. The previous agent's claims are claims. Check them against the repo before building on them.",
         "",
@@ -175,7 +192,9 @@ def _transcript(brief: Brief, transcript_path: str | None) -> list[str]:
         "",
         f"Every turn of the old session, normalized: `{transcript_path}`",
         "",
-        "Grep it when this summary is not enough. It is JSON: "
-        "`{turns: [{role, text, ts, tools:[{kind,name,path,command,ok}]}]}`.",
+        (
+            "Grep it when this summary is not enough. It is JSON: "
+            "`{turns: [{role, text, ts, tools:[{kind,name,path,command,ok}]}]}`."
+        ),
         "",
     ]

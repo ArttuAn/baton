@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..model import Session, SessionRef, ToolCall, Turn
@@ -33,7 +33,7 @@ def _stamp(value) -> str | None:
     if value in (None, ""):
         return None
     try:
-        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat(timespec="seconds")
+        return datetime.fromtimestamp(float(value), tz=UTC).isoformat(timespec="seconds")
     except (TypeError, ValueError, OSError):
         return str(value)
 

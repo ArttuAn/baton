@@ -15,10 +15,10 @@ from .model import Session, ToolCall
 from .workspace import Workspace
 
 STOP_PATTERNS = [
-    (re.compile(r"rate.?limit", re.I), "the provider rate-limited the session"),
-    (re.compile(r"usage (limit|exceeded)|out of (usage|credit)", re.I), "the plan's usage ran out"),
-    (re.compile(r"quota", re.I), "a quota was exhausted"),
-    (re.compile(r"context (window|length) exceeded|too many tokens", re.I), "the context window filled up"),
+    (re.compile(r"rate.?limit", re.IGNORECASE), "the provider rate-limited the session"),
+    (re.compile(r"usage (limit|exceeded)|out of (usage|credit)", re.IGNORECASE), "the plan's usage ran out"),
+    (re.compile(r"quota", re.IGNORECASE), "a quota was exhausted"),
+    (re.compile(r"context (window|length) exceeded|too many tokens", re.IGNORECASE), "the context window filled up"),
 ]
 
 NOISE = re.compile(r"^(cd |ls |pwd|echo |cat |git status|git diff|git log|which |tmux capture)")

@@ -11,4 +11,4 @@ READERS = {
     "hermes": hermes,
 }
 
-__all__ = ["READERS", "claude", "opencode", "codex", "hermes"]
+__all__ = ["READERS", "claude", "codex", "hermes", "opencode"]

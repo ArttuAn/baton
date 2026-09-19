@@ -6,6 +6,7 @@ import argparse
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from . import install, pack
 from .pack import BatonError
@@ -18,6 +19,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command")
 
     doctor = sub.add_parser("doctor", help="which harnesses baton can read and launch")
+    doctor.add_argument(
+        "--quick", action="store_true", help="skip the format canary (do not parse real sessions)"
+    )
     doctor.set_defaults(func=cmd_doctor)
 
     sessions = sub.add_parser("sessions", help="recent sessions for this project, newest first")
@@ -69,15 +73,46 @@ def _pack_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--from", dest="harness", help="source harness (default: most recent session)")
     parser.add_argument("--session", help="source session id or prefix")
     parser.add_argument("--out", help="directory for the handoff (default: <dir>/.baton)")
+    parser.add_argument(
+        "--minimal",
+        action="store_true",
+        help="only what the repo cannot say itself: the brief, why it stopped, what failed",
+    )
 
 
 def cmd_doctor(args) -> int:
+    drifted = False
     for name, info in pack.available().items():
         read = f"{info['sessions']:>4} sessions" if info.get("readable") else "unreadable"
         launch = "launchable" if info.get("cli") else f"no `{name}` on PATH"
         print(f"{name:<9} {read:<16} {launch}")
         if info.get("error"):
             print(f"{'':<9} {info['error']}")
+        if args.quick or not info.get("readable") or not info.get("sessions"):
+            continue
+        check = pack.probe(name)
+        if not check["probed"]:
+            continue
+        if check.get("thin"):
+            print(f"{'':<9} too few turns to judge the format ({check['signals']['turns']})")
+        elif check["problems"]:
+            drifted = True
+            for problem in check["problems"]:
+                print(f"{'':<9} \u26a0 {problem}")
+        else:
+            signals = check["signals"]
+            print(
+                f"{'':<9} format ok \u2014 probed {check['probed']}: "
+                f"{signals['prompts']} prompts, {signals['tools']} tool calls"
+            )
+    if drifted:
+        print(
+            "\nA signal missing from every probed session means that harness changed its\n"
+            "store format. Handoffs will render, but with holes. Fix the reader in\n"
+            "src/baton/readers/ before trusting one.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
@@ -104,7 +139,7 @@ def cmd_pack(args) -> int:
 def _do_pack(args):
     ref = pack.pick(args.dir, args.harness, args.session)
     brief, _ = pack.build(ref, args.dir)
-    return pack.write(brief, args.dir, args.out), brief
+    return pack.write(brief, args.dir, args.out, minimal=args.minimal), brief
 
 
 def cmd_install(args) -> int:
@@ -119,9 +154,9 @@ def cmd_continue(args) -> int:
     """One call, everything an agent needs: the handoff document on stdout."""
     ref = pack.pick(args.dir, args.harness, args.session)
     brief, _ = pack.build(ref, args.dir)
-    paths = pack.write(brief, args.dir, args.out)
+    paths = pack.write(brief, args.dir, args.out, minimal=args.minimal)
     print(f"<!-- baton: {ref.harness} session {ref.id} · saved to {paths['document']} -->")
-    print(open(paths["document"]).read())
+    print(Path(paths["document"]).read_text())
     if brief.is_thin():
         print("baton: warning — that session has almost nothing in it", file=sys.stderr)
     return 0

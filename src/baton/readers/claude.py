@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..model import Session, SessionRef, ToolCall, Turn
@@ -38,7 +38,7 @@ def slug(directory: str) -> str:
 
 
 def _stamp(epoch: float) -> str:
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.fromtimestamp(epoch, tz=UTC).isoformat(timespec="seconds")
 
 
 def list_sessions(directory: str | None = None) -> list[SessionRef]:
@@ -102,7 +102,7 @@ def _blocks(content) -> list[dict]:
 def _is_injected(text: str) -> bool:
     """System reminders and slash-command scaffolding are not things the human typed."""
     stripped = text.strip()
-    return stripped.startswith("<system-reminder") or stripped.startswith("<command-")
+    return stripped.startswith(("<system-reminder", "<command-"))
 
 
 def load(ref: SessionRef) -> Session:

@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -42,7 +43,7 @@ def test_writing_a_handoff_leaves_a_document_a_transcript_and_a_latest_pointer(t
     assert (document / "latest.md").exists()
     assert paths["document"].endswith(".md")
 
-    payload = json.loads(open(paths["transcript"]).read())
+    payload = json.loads(Path(paths["transcript"]).read_text())
     assert payload["harness"] == "claude"
     assert payload["turns"][0]["human"] is True
     assert payload["turns"][1]["tools"][0]["path"] == "src/p.py"
@@ -104,9 +105,10 @@ def test_install_links_the_skill_only_into_harnesses_that_exist(tmp_path):
     present.parent.mkdir(parents=True)
     absent = tmp_path / ".nothing" / "skills"
 
-    results = dict((name, outcome) for name, outcome, _ in install_mod.install(
-        {"claude": present, "ghost": absent}
-    ))
+    results = {
+        name: outcome
+        for name, outcome, _ in install_mod.install({"claude": present, "ghost": absent})
+    }
     assert results == {"claude": "linked", "ghost": "skipped"}
     assert (present / "session-handoff" / "SKILL.md").is_file()
     assert not absent.exists()

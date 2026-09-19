@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ..model import Session, SessionRef, ToolCall, Turn
@@ -45,7 +45,7 @@ def _connect() -> sqlite3.Connection | None:
 def _stamp(millis) -> str | None:
     if not millis:
         return None
-    return datetime.fromtimestamp(millis / 1000, tz=timezone.utc).isoformat(timespec="seconds")
+    return datetime.fromtimestamp(millis / 1000, tz=UTC).isoformat(timespec="seconds")
 
 
 def list_sessions(directory: str | None = None) -> list[SessionRef]:

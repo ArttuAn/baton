@@ -16,7 +16,8 @@
   <img alt="Zero dependencies" src="https://img.shields.io/badge/runtime-zero%20dependencies-1f2937">
   <img alt="No model calls" src="https://img.shields.io/badge/model%20calls-none-16a34a?logo=ghostery&logoColor=white">
   <img alt="Offline" src="https://img.shields.io/badge/network-offline%20capable-0ea5e9?logo=wifi&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-24%20passing-16a34a?logo=pytest&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-34%20passing-16a34a?logo=pytest&logoColor=white">
+  <img alt="Lint" src="https://img.shields.io/badge/ruff-clean-261230?logo=ruff&logoColor=white">
   <img alt="Harnesses" src="https://img.shields.io/badge/harnesses-4-7c3aed">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
 </p>
@@ -96,7 +97,8 @@ files, treat the old agent's work as done — and **its claims as claims**.
 ## 🕹️ Or drive it yourself
 
 ```sh
-baton doctor                  # which harnesses are readable and launchable
+baton doctor                  # which harnesses are readable, launchable, and still parse
+baton doctor --quick          # ...without parsing real sessions
 baton sessions                # every session for this project, any harness, newest first
 baton continue                # print the handoff for the last real session
 baton pack                    # just write .baton/handoff-<harness>-<stamp>.md
@@ -111,9 +113,48 @@ baton resume claude           # later: come back to Claude on the same handoff
 | `--session <id>` | Pick a specific session (id or prefix) |
 | `--dry-run` | Print the launch command instead of running it |
 | `--out <dir>` | Write the handoff somewhere other than `<dir>/.baton` |
+| `--minimal` | Only what the repo cannot say itself — see below |
 
 `baton` skips one-turn stub sessions when it picks "the last session" — a launch
 test or a crash on the first prompt is never what you meant.
+
+### ✂️ `--minimal`
+
+Roughly a third of a handoff is doing the real work. **Files changed** and
+**commands run** are reconstructions of things `git status` and `git diff`
+already know more accurately — so `--minimal` drops them and keeps only what
+the repository cannot tell the next agent itself:
+
+> the verbatim brief · why it stopped · what already failed
+
+In practice that is a **~65% shorter document** on a real session (6.9 KB → 2.3 KB).
+Short handoffs get read; long ones get skimmed. The full transcript is still
+linked either way.
+
+### 🐤 The format canary
+
+Every reader parses a store format its vendor never documented and never
+promised to keep. When one drifts the failure is **silent**: sessions still
+list, the document still renders, it is just empty where it matters.
+
+So `baton doctor` parses the newest real sessions per harness and asserts the
+signals a handoff is built from are still coming through:
+
+```
+claude      60 sessions    launchable
+          format ok — probed 3: 30 prompts, 140 tool calls
+opencode    71 sessions    launchable
+          format ok — probed 3: 96 prompts, 898 tool calls
+codex        1 sessions    launchable
+          too few turns to judge the format (2)
+hermes      12 sessions    launchable
+          format ok — probed 3: 3 prompts, 7 tool calls
+```
+
+A signal missing from **every** probed session is drift, and `doctor` exits `1`.
+A signal missing from one quiet session is not — stub sessions are skipped and
+a sample under six turns reports *"too few turns to judge"* rather than crying
+wolf. Absence of evidence is not evidence of absence.
 
 ## 📄 What's in a handoff
 
@@ -162,9 +203,14 @@ Everything downstream of `readers/` works on one normalized `Session`.
 ## 🧪 Develop
 
 ```sh
-.venv/bin/python -m pytest -q     # 24 tests
-.venv/bin/ruff check .
+.venv/bin/python -m pytest -q     # 34 tests
+.venv/bin/ruff check .            # clean
 ```
+
+Readers are tested against **synthetic** fixtures, which prove the parser
+matches our idea of each format — they cannot notice a vendor changing it.
+That is what `baton doctor` is for: the fixtures guard the logic, the canary
+guards the assumption.
 
 ## 📜 License
 
