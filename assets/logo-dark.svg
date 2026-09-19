@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 170" width="440" height="170" role="img" aria-label="baton">
+  <title>baton</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <path d="M28 130 C 44 44, 116 44, 132 130" fill="none" stroke="#f59e0b"
+        stroke-width="7" stroke-linecap="round" stroke-dasharray="1 16"/>
+  <g transform="rotate(-32 80 92)">
+    <rect x="62" y="48" width="36" height="88" rx="18" fill="url(#bg)"/>
+    <rect x="70" y="59" width="8" height="32" rx="4" fill="#ffffff" opacity=".38"/>
+  </g>
+  <text x="168" y="98" font-family="Inter, ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="72" font-weight="700" letter-spacing="-3" fill="#f1f5f9">baton</text>
+  <text x="172" y="130" font-family="Inter, ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        font-size="19" font-weight="500" letter-spacing="1" fill="#94a3b8">hand the session over</text>
+</svg>
