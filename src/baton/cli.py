@@ -8,10 +8,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from . import install, pack
+from . import install, pack, picker
 from .pack import BatonError
 
-USAGE = "baton <doctor|sessions|pack|resume|handoff>"
+USAGE = "baton <doctor|sessions|pick|pack|resume|handoff>"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -51,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
     _pack_args(carry)
     carry.set_defaults(func=cmd_continue)
 
+    chooser = sub.add_parser("pick", help="click a terminal window, print the session running in it")
+    chooser.add_argument("--timeout", type=int, default=60)
+    chooser.set_defaults(func=cmd_pick)
+
     handoff = sub.add_parser("handoff", help="pack the live session and open it in another harness")
     handoff.add_argument("target", help="claude | opencode | codex | hermes")
     _pack_args(handoff)
@@ -78,6 +82,24 @@ def _pack_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="only what the repo cannot say itself: the brief, why it stopped, what failed",
     )
+    parser.add_argument(
+        "--pick", action="store_true", help="choose the source session by clicking its terminal window"
+    )
+
+
+def _apply_pick(args) -> None:
+    """--pick: the clicked window decides harness, session and project directory."""
+    if not getattr(args, "pick", False):
+        return
+    chosen = picker.pick()
+    print(f"picked: {chosen.harness} pid {chosen.pid} · {chosen.title!r} · {chosen.directory}", file=sys.stderr)
+    args.harness, args.session, args.dir = chosen.harness, chosen.session_id, chosen.directory
+
+
+def cmd_pick(args) -> int:
+    chosen = picker.pick(args.timeout)
+    print(f"{chosen.harness} {chosen.session_id or '?'} {chosen.directory}  # pid {chosen.pid} · {chosen.title}")
+    return 0
 
 
 def cmd_doctor(args) -> int:
@@ -137,6 +159,7 @@ def cmd_pack(args) -> int:
 
 
 def _do_pack(args):
+    _apply_pick(args)
     ref = pack.pick(args.dir, args.harness, args.session)
     brief, _ = pack.build(ref, args.dir)
     return pack.write(brief, args.dir, args.out, minimal=args.minimal), brief
@@ -152,6 +175,7 @@ def cmd_install(args) -> int:
 
 def cmd_continue(args) -> int:
     """One call, everything an agent needs: the handoff document on stdout."""
+    _apply_pick(args)
     ref = pack.pick(args.dir, args.harness, args.session)
     brief, _ = pack.build(ref, args.dir)
     paths = pack.write(brief, args.dir, args.out, minimal=args.minimal)

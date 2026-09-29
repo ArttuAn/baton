@@ -84,3 +84,11 @@ def test_the_live_plan_comes_from_the_last_todo_write(tmp_path):
 
 def test_a_session_with_nothing_in_it_is_reported_as_thin(tmp_path):
     assert brief_mod.build(session_with(), space(tmp_path)).is_thin()
+
+
+def test_a_tilde_with_no_such_user_is_skipped_not_fatal(tmp_path):
+    (tmp_path / "ref.txt").write_text("y")
+    command = "cd ~nosuchuser42 && cat ~nosuchuser42/x ref.txt"
+    session = session_with(Turn(role="assistant", tools=[ToolCall(kind="run", name="bash", command=command)]))
+    out = brief_mod.build(session, space(tmp_path))
+    assert "ref.txt" in out.read

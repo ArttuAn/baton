@@ -182,7 +182,10 @@ def _mined_paths(calls: list[ToolCall], workspace: Workspace) -> tuple[list[str]
         if call.kind != "run" or not call.command:
             continue
         for match in CD.finditer(call.command):
-            target = Path(match.group(1)).expanduser()
+            try:
+                target = Path(match.group(1)).expanduser()
+            except RuntimeError:  # "~name" with no such user
+                continue
             candidate = target if target.is_absolute() else cwd / target
             try:
                 if candidate.is_dir():
@@ -193,7 +196,10 @@ def _mined_paths(calls: list[ToolCall], workspace: Workspace) -> tuple[list[str]
         for token in PATH_TOKEN.findall(call.command):
             if PATH_NOISE.search(token) or token.startswith("-"):
                 continue
-            candidate = Path(token).expanduser()
+            try:
+                candidate = Path(token).expanduser()
+            except RuntimeError:  # "~name" with no such user
+                continue
             for resolved in ([candidate] if candidate.is_absolute() else [cwd / candidate, base / candidate]):
                 try:
                     if resolved.is_file():

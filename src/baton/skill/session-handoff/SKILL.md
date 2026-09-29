@@ -1,6 +1,6 @@
 ---
 name: session-handoff
-description: Pick up work from a coding session that ended in a different agent harness. Use whenever the user says a session died, crashed, froze, ran out of usage, hit a rate limit or the 5-hour limit, or that they were working in Claude Code / opencode / Codex / Hermes and want to continue, resume, or pick up that project here — including phrasings like "the session died with opencode, continue where I left off", "carry on from my last Claude session", "I ran out of usage in X, keep going". Reads the other harness's session log off disk via `baton`; it needs no model on the dead side.
+description: Pick up work from a coding session that ended in a different agent harness. Use whenever the user says a session died, crashed, froze, ran out of usage, hit a rate limit or the 5-hour limit, or that they were working in Claude Code / opencode / Codex / Hermes and want to continue, resume, or pick up that project here — including phrasings like "the session died with opencode, continue where I left off", "carry on from my last Claude session", "I ran out of usage in X, keep going", "continue the session in my other window", "let me pick the window". Reads the other harness's session log off disk via `baton`; it needs no model on the dead side.
 ---
 
 # Continuing someone else's session
@@ -27,6 +27,24 @@ baton continue --dir "$PWD" --from opencode
 
 If the work happened somewhere other than the current directory, point `--dir`
 at that project.
+
+## Let the user click the window
+
+When the user points at a session by its terminal window — "the one in my other
+window", "let me pick it", "pick" passed as an argument — or when more than one
+agent session is still live and you cannot tell which they mean, let them click:
+
+```sh
+baton continue --pick
+```
+
+Tell them first, in one line, to click the terminal window they want; the
+windows of other live agent sessions are briefly retitled `baton-pick #<pid>`
+so they can see which are pickable. The call blocks until they click (60s
+timeout). The clicked window decides the harness, the session and the project
+directory — do not pass `--dir` or `--from` with it. `baton pick` alone prints
+the chosen session without building a handoff. X11 only; on Wayland it refuses,
+and you fall back to `baton sessions`.
 
 ## When it does not resolve cleanly
 
