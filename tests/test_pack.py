@@ -37,9 +37,10 @@ def test_the_next_step_points_at_the_verification_the_old_agent_used(tmp_path):
     assert "pytest -q" in render.markdown(sample(tmp_path))
 
 
-def test_writing_a_handoff_leaves_a_document_a_transcript_and_a_latest_pointer(tmp_path):
+def test_writing_a_handoff_leaves_a_document_a_transcript_and_a_latest_pointer(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     paths = pack.write(sample(tmp_path), str(tmp_path))
-    document = tmp_path / ".baton"
+    document = pack.default_out_dir(str(tmp_path))
     assert (document / "latest.md").exists()
     assert paths["document"].endswith(".md")
 
@@ -125,3 +126,42 @@ def test_install_is_idempotent_and_never_clobbers_a_real_directory(tmp_path):
     other = tmp_path / ".codex" / "skills"
     (other / "session-handoff").mkdir(parents=True)
     assert install_mod.install({"codex": other})[0][1] == "left alone"
+
+
+def test_private_handoffs_stay_outside_project_and_redact_credentials(tmp_path, monkeypatch):
+    import os
+    import stat
+    from baton.model import Turn
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    brief = sample(project)
+    credential = "ghp_" + "a" * 36
+    brief.session.turns.append(Turn(role="user", text=f"Authorization: Bearer {credential} password=private-example"))
+    brief = build(brief.session, brief.workspace)
+    old_umask = os.umask(0)
+    try:
+        paths = pack.write(brief, str(project), minimal=True)
+    finally:
+        os.umask(old_umask)
+    assert not (project / ".baton").exists()
+    for name in ("document", "transcript"):
+        path = Path(paths[name])
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+        text = path.read_text()
+        assert credential not in text
+        assert "private-example" not in text
+        assert "REDACTED" in text
+
+
+def test_explicit_export_does_not_follow_preexisting_file_symlinks(tmp_path):
+    brief = sample(tmp_path)
+    output = tmp_path / "exports"
+    output.mkdir()
+    target = tmp_path / "unrelated"
+    target.write_text("keep")
+    (output / "latest.md").symlink_to(target)
+    paths = pack.write(brief, str(tmp_path), str(output))
+    assert target.read_text() == "keep"
+    assert Path(paths["latest"]).resolve() == Path(paths["document"])

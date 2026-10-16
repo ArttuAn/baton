@@ -1,8 +1,13 @@
-"""Packing: pick a session, build the brief, write it next to the project."""
+"""Packing: pick a session, build the brief, write a private handoff."""
 
 from __future__ import annotations
 
 import json
+import hashlib
+import os
+import stat
+import tempfile
+import uuid
 import shutil
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -10,6 +15,7 @@ from pathlib import Path
 
 from . import brief as brief_mod
 from . import render
+from .privacy import redact_payload, redact_text
 from . import workspace as workspace_mod
 from .model import Session, SessionRef
 from .readers import READERS
@@ -78,6 +84,23 @@ def build(ref: SessionRef, directory: str) -> tuple[brief_mod.Brief, Session]:
     return brief_mod.build(session, space), session
 
 
+def default_out_dir(directory: str) -> Path:
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    project = hashlib.sha256(str(Path(directory).resolve()).encode()).hexdigest()[:24]
+    return state / "baton" / project
+
+
+def _private_write(path: Path, text: str) -> None:
+    fd, temporary = tempfile.mkstemp(prefix=".handoff-", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def write(
     brief: brief_mod.Brief,
     directory: str,
@@ -86,22 +109,26 @@ def write(
     minimal: bool = False,
 ) -> dict[str, str]:
     """Write the handoff pair: the document, and the transcript it points at."""
-    base = Path(out_dir) if out_dir else Path(directory) / ".baton"
-    base.mkdir(parents=True, exist_ok=True)
+    base = Path(out_dir) if out_dir else default_out_dir(directory)
+    base.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = base.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise BatonError("handoff directory must be owned by the current user and cannot be a symlink")
+    base.chmod(0o700)
     stamp = datetime.now(UTC).astimezone().strftime("%Y%m%d-%H%M%S")
-    slug = f"handoff-{brief.session.harness}-{stamp}"
+    slug = f"handoff-{brief.session.harness}-{stamp}-{uuid.uuid4().hex[:8]}"
     transcript = base / f"{slug}.transcript.json"
     document = base / f"{slug}.md"
 
-    transcript.write_text(json.dumps(_transcript_payload(brief.session), indent=1))
-    document.write_text(render.markdown(brief, transcript_path=str(transcript), minimal=minimal))
+    _private_write(transcript, json.dumps(redact_payload(_transcript_payload(brief.session)), indent=1))
+    _private_write(document, redact_text(render.markdown(brief, transcript_path=str(transcript), minimal=minimal)))
     latest = base / "latest.md"
     try:
         if latest.is_symlink() or latest.exists():
             latest.unlink()
         latest.symlink_to(document.name)
     except OSError:
-        shutil.copyfile(document, latest)
+        _private_write(latest, document.read_text())
     return {"document": str(document), "transcript": str(transcript), "latest": str(latest)}
 
 
