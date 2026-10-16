@@ -36,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
     resume = sub.add_parser("resume", help="start another harness on an existing handoff")
     resume.add_argument("target", help="claude | opencode | codex | hermes")
     resume.add_argument("--dir", default=os.getcwd())
-    resume.add_argument("--pack", help="handoff document (default: .baton/latest.md)")
+    resume.add_argument("--pack", help="handoff document (default: private state directory/latest.md)")
     resume.add_argument("--dry-run", action="store_true", help="print the command instead of running it")
     resume.set_defaults(func=cmd_resume)
 
@@ -76,7 +76,7 @@ def _pack_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dir", default=os.getcwd())
     parser.add_argument("--from", dest="harness", help="source harness (default: most recent session)")
     parser.add_argument("--session", help="source session id or prefix")
-    parser.add_argument("--out", help="directory for the handoff (default: <dir>/.baton)")
+    parser.add_argument("--out", help="directory for the handoff (default: private user state directory)")
     parser.add_argument(
         "--minimal",
         action="store_true",
@@ -187,7 +187,7 @@ def cmd_continue(args) -> int:
 
 
 def cmd_resume(args) -> int:
-    document = args.pack or os.path.join(args.dir, ".baton", "latest.md")
+    document = args.pack or str(pack.default_out_dir(args.dir) / "latest.md")
     if not os.path.exists(document):
         raise BatonError(f"no handoff at {document} — run `baton pack` first")
     return _launch(pack.resume_command(args.target, os.path.abspath(document), args.dir), args)

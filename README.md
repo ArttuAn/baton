@@ -101,7 +101,7 @@ baton doctor                  # which harnesses are readable, launchable, and st
 baton doctor --quick          # ...without parsing real sessions
 baton sessions                # every session for this project, any harness, newest first
 baton continue                # print the handoff for the last real session
-baton pack                    # just write .baton/handoff-<harness>-<stamp>.md
+baton pack                    # write a private handoff outside the project
 baton handoff opencode        # pack the live session and open it in opencode
 baton resume claude           # later: come back to Claude on the same handoff
 ```
@@ -112,7 +112,7 @@ baton resume claude           # later: come back to Claude on the same handoff
 | `--from <harness>` | Force the source harness instead of the most recent session |
 | `--session <id>` | Pick a specific session (id or prefix) |
 | `--dry-run` | Print the launch command instead of running it |
-| `--out <dir>` | Write the handoff somewhere other than `<dir>/.baton` |
+| `--out <dir>` | Choose an explicit export directory (contains private session data) |
 | `--minimal` | Only what the repo cannot say itself — see below |
 
 `baton` skips one-turn stub sessions when it picks "the last session" — a launch
@@ -191,7 +191,7 @@ No summary of a summary — the load-bearing parts are **quoted, not paraphrased
         ▼  normalized Session
   brief.py      distill: prompts, files, commands, failures, stop reason
   render.py     write the markdown handoff
-  pack.py       persist to .baton/ alongside the JSON transcript
+  pack.py       persist privately alongside the JSON transcript
   workspace.py  project + slug resolution
   cli.py        doctor · sessions · continue · pack · handoff · resume · install
 ```
@@ -215,3 +215,19 @@ guards the assumption.
 ## 📜 License
 
 MIT © Arttu Antikainen
+
+### Handoff privacy
+
+Default exports now live under `$XDG_STATE_HOME/baton/<project-hash>` (or
+`~/.local/state/baton/<project-hash>`), outside the project and its Git tree.
+Directories are 0700 and handoff/transcript files are created atomically as 0600.
+`baton resume` finds `latest.md` there; use `--pack` for older project-local
+handoffs. `--out` remains an explicit export and tightens that directory to 0700.
+
+Common credential formats, bearer tokens, and secret assignments are redacted
+from both output files. This is best-effort redaction: review exports before
+sharing them. Session text can contain personal data and unrecognized secrets.
+`--minimal` changes the document presentation; the private transcript still
+contains session history after redaction. Old `.baton` exports are not migrated
+or erased by this change; remove unwanted tracked exports and rotate any
+credentials previously included in shared copies.
