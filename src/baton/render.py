@@ -74,7 +74,12 @@ def _git_line(brief: Brief) -> str | None:
 def _asks(brief: Brief) -> list[str]:
     if not brief.asks:
         return []
-    out = ["## What was asked", "", "Verbatim, in order — this is the actual brief, not a summary of one.", ""]
+    out = [
+        "## What was asked",
+        "",
+        "Verbatim, in order — this is the actual brief, not a summary of one.",
+        "",
+    ]
     for index, ask in enumerate(brief.asks, 1):
         body = ask.strip()
         if len(body) > 700:

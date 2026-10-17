@@ -43,7 +43,10 @@ def inspect(directory: str, since: str | None = None) -> Workspace:
     workspace.head = _git(directory, "log", "-1", "--format=%h %s")
     status = _git(directory, "status", "--porcelain") or ""
     workspace.dirty = [line for line in status.splitlines() if line.strip()]
-    workspace.diffstat = _git(directory, "diff", "--stat") or None
+    # HEAD covers staged and unstaged alike; an empty repo has no HEAD yet.
+    workspace.diffstat = (
+        _git(directory, "diff", "HEAD", "--stat") or _git(directory, "diff", "--stat") or None
+    )
     if since:
         log = _git(directory, "log", f"--since={since}", "--format=%h %s", "-20") or ""
         workspace.commits = [line for line in log.splitlines() if line.strip()]

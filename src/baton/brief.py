@@ -18,7 +18,10 @@ STOP_PATTERNS = [
     (re.compile(r"rate.?limit", re.IGNORECASE), "the provider rate-limited the session"),
     (re.compile(r"usage (limit|exceeded)|out of (usage|credit)", re.IGNORECASE), "the plan's usage ran out"),
     (re.compile(r"quota", re.IGNORECASE), "a quota was exhausted"),
-    (re.compile(r"context (window|length) exceeded|too many tokens", re.IGNORECASE), "the context window filled up"),
+    (
+        re.compile(r"context (window|length) exceeded|too many tokens", re.IGNORECASE),
+        "the context window filled up",
+    ),
 ]
 
 NOISE = re.compile(r"^(cd |ls |pwd|echo |cat |git status|git diff|git log|which |tmux capture)")
@@ -65,13 +68,11 @@ def build(session: Session, workspace: Workspace, *, max_commands: int = 25, tai
 
     written, consulted = _mined_paths(calls, workspace)
     brief.edited = _merge(_paths(calls, "edit"), _dirty_paths(workspace), written)[:40]
-    brief.read = [
-        path for path in _merge(_paths(calls, "read"), consulted) if path not in brief.edited
-    ][:25]
+    brief.read = [path for path in _merge(_paths(calls, "read"), consulted) if path not in brief.edited][:25]
     brief.commands = _commands(calls, max_commands)
-    brief.failures = _merge(
-        [_headline(call.command) or call.line() for call in calls if call.ok is False]
-    )[-8:]
+    brief.failures = _merge([_headline(call.command) or call.line() for call in calls if call.ok is False])[
+        -8:
+    ]
     brief.todos = _todos(calls)
     brief.last_words = session.last_assistant_text()[-tail:].strip()
     brief.stopped_because = _stopped_because(session, brief.last_words)
@@ -200,7 +201,7 @@ def _mined_paths(calls: list[ToolCall], workspace: Workspace) -> tuple[list[str]
                 candidate = Path(token).expanduser()
             except RuntimeError:  # "~name" with no such user
                 continue
-            for resolved in ([candidate] if candidate.is_absolute() else [cwd / candidate, base / candidate]):
+            for resolved in [candidate] if candidate.is_absolute() else [cwd / candidate, base / candidate]:
                 try:
                     if resolved.is_file():
                         bucket.setdefault(_display(resolved, base), None)

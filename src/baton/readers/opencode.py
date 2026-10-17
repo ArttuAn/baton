@@ -48,6 +48,20 @@ def _stamp(millis) -> str | None:
     return datetime.fromtimestamp(millis / 1000, tz=UTC).isoformat(timespec="seconds")
 
 
+def _json(raw):
+    try:
+        return json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def _rows(db: sqlite3.Connection, query: str, params: tuple) -> list:
+    try:
+        return db.execute(query, params).fetchall()
+    except sqlite3.Error:
+        return []
+
+
 def list_sessions(directory: str | None = None) -> list[SessionRef]:
     db = _connect()
     if db is None:
@@ -61,7 +75,8 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
     target = str(Path(directory).resolve()) if directory else None
     refs = []
     for sid, sdir, title, updated, count in rows:
-        if target and sdir and str(Path(sdir).resolve()) != target:
+        # A session with no directory cannot be attributed to this project — exclude it when filtering.
+        if target and (not sdir or str(Path(sdir).resolve()) != target):
             continue
         refs.append(
             SessionRef(
@@ -91,17 +106,21 @@ def load(ref: SessionRef) -> Session:
             session.model = _model_name(model)
             session.started = _stamp(created)
             session.ended = _stamp(updated)
-        messages = db.execute(
-            "select id, data from message where session_id = ? order by time_created, id", (ref.id,)
-        ).fetchall()
+        messages = _rows(
+            db, "select id, data from message where session_id = ? order by time_created, id", (ref.id,)
+        )
         parts: dict[str, list[dict]] = {}
-        for message_id, data in db.execute(
-            "select message_id, data from part where session_id = ? order by time_created, id", (ref.id,)
+        for message_id, data in _rows(
+            db, "select message_id, data from part where session_id = ? order by time_created, id", (ref.id,)
         ):
-            parts.setdefault(message_id, []).append(json.loads(data))
+            part = _json(data)
+            if part is not None:
+                parts.setdefault(message_id, []).append(part)
 
     for message_id, data in messages:
-        info = json.loads(data)
+        info = _json(data)
+        if info is None:
+            continue
         role = info.get("role") or "assistant"
         texts, tools = [], []
         for part in parts.get(message_id, []):

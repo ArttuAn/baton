@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
+import shutil
 import stat
 import tempfile
 import uuid
-import shutil
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
 from . import brief as brief_mod
 from . import render
-from .privacy import redact_payload, redact_text
 from . import workspace as workspace_mod
 from .model import Session, SessionRef
+from .privacy import redact_payload, redact_text
 from .readers import READERS
 
 
@@ -121,7 +121,9 @@ def write(
     document = base / f"{slug}.md"
 
     _private_write(transcript, json.dumps(redact_payload(_transcript_payload(brief.session)), indent=1))
-    _private_write(document, redact_text(render.markdown(brief, transcript_path=str(transcript), minimal=minimal)))
+    _private_write(
+        document, redact_text(render.markdown(brief, transcript_path=str(transcript), minimal=minimal))
+    )
     latest = base / "latest.md"
     try:
         if latest.is_symlink() or latest.exists():

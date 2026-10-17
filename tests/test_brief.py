@@ -61,7 +61,10 @@ def test_relative_paths_resolve_against_the_directory_the_session_cd_ed_into(tmp
     nested.mkdir()
     (nested / "main.py").write_text("x")
     session = session_with(
-        Turn(role="assistant", tools=[ToolCall(kind="run", name="bash", command="cd pkg && sed -i s/a/b/ main.py")])
+        Turn(
+            role="assistant",
+            tools=[ToolCall(kind="run", name="bash", command="cd pkg && sed -i s/a/b/ main.py")],
+        )
     )
     out = brief_mod.build(session, space(tmp_path))
     assert "pkg/main.py" in out.edited
@@ -75,8 +78,26 @@ def test_a_rate_limited_ending_is_named_as_the_reason_it_stopped(tmp_path):
 
 def test_the_live_plan_comes_from_the_last_todo_write(tmp_path):
     session = session_with(
-        Turn(role="assistant", tools=[ToolCall(kind="todo", name="TodoWrite", extra={"todos": [{"content": "old", "status": "completed"}]})]),
-        Turn(role="assistant", tools=[ToolCall(kind="todo", name="TodoWrite", extra={"todos": [{"content": "new", "status": "in_progress"}]})]),
+        Turn(
+            role="assistant",
+            tools=[
+                ToolCall(
+                    kind="todo",
+                    name="TodoWrite",
+                    extra={"todos": [{"content": "old", "status": "completed"}]},
+                )
+            ],
+        ),
+        Turn(
+            role="assistant",
+            tools=[
+                ToolCall(
+                    kind="todo",
+                    name="TodoWrite",
+                    extra={"todos": [{"content": "new", "status": "in_progress"}]},
+                )
+            ],
+        ),
     )
     out = brief_mod.build(session, space(tmp_path))
     assert out.todos == [{"content": "new", "status": "in_progress"}]

@@ -30,13 +30,15 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
         meta = _meta(file)
         if meta is None:
             continue
-        if target and meta.get("cwd") and str(Path(meta["cwd"]).resolve()) != target:
+        cwd = meta.get("cwd")
+        # A session with no cwd cannot be attributed to this project — exclude it when filtering.
+        if target and (not cwd or str(Path(cwd).resolve()) != target):
             continue
         refs.append(
             SessionRef(
                 harness=NAME,
                 id=meta.get("session_id") or file.stem,
-                directory=meta.get("cwd"),
+                directory=cwd,
                 title=None,
                 updated=_stamp(file.stat().st_mtime),
                 messages=None,
@@ -84,9 +86,7 @@ def load(ref: SessionRef) -> Session:
             if role not in ("user", "assistant"):
                 continue
             text = "\n".join(
-                block.get("text") or ""
-                for block in payload.get("content") or []
-                if isinstance(block, dict)
+                block.get("text") or "" for block in payload.get("content") or [] if isinstance(block, dict)
             ).strip()
             if not text:
                 continue

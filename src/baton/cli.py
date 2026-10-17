@@ -40,9 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     resume.add_argument("--dry-run", action="store_true", help="print the command instead of running it")
     resume.set_defaults(func=cmd_resume)
 
-    installer = sub.add_parser(
-        "install", help="link the session-handoff skill into every harness you have"
-    )
+    installer = sub.add_parser("install", help="link the session-handoff skill into every harness you have")
     installer.set_defaults(func=cmd_install)
 
     carry = sub.add_parser(
@@ -92,13 +90,17 @@ def _apply_pick(args) -> None:
     if not getattr(args, "pick", False):
         return
     chosen = picker.pick()
-    print(f"picked: {chosen.harness} pid {chosen.pid} · {chosen.title!r} · {chosen.directory}", file=sys.stderr)
+    print(
+        f"picked: {chosen.harness} pid {chosen.pid} · {chosen.title!r} · {chosen.directory}", file=sys.stderr
+    )
     args.harness, args.session, args.dir = chosen.harness, chosen.session_id, chosen.directory
 
 
 def cmd_pick(args) -> int:
     chosen = picker.pick(args.timeout)
-    print(f"{chosen.harness} {chosen.session_id or '?'} {chosen.directory}  # pid {chosen.pid} · {chosen.title}")
+    print(
+        f"{chosen.harness} {chosen.session_id or '?'} {chosen.directory}  # pid {chosen.pid} · {chosen.title}"
+    )
     return 0
 
 

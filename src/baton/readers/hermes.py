@@ -57,7 +57,8 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
     target = str(Path(directory).resolve()) if directory else None
     refs = []
     for sid, cwd, title, updated, count in rows:
-        if target and cwd and str(Path(cwd).resolve()) != target:
+        # A session with no cwd cannot be attributed to this project — exclude it when filtering.
+        if target and (not cwd or str(Path(cwd).resolve()) != target):
             continue
         refs.append(
             SessionRef(

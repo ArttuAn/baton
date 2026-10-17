@@ -15,9 +15,14 @@ def sample(tmp_path):
         model="opus",
         turns=[
             Turn(role="user", text="fix the parser", meta={"synthetic": False}),
-            Turn(role="assistant", text="done, tests pass",
-                 tools=[ToolCall(kind="edit", name="Edit", path="src/p.py"),
-                        ToolCall(kind="run", name="Bash", command="pytest -q")]),
+            Turn(
+                role="assistant",
+                text="done, tests pass",
+                tools=[
+                    ToolCall(kind="edit", name="Edit", path="src/p.py"),
+                    ToolCall(kind="run", name="Bash", command="pytest -q"),
+                ],
+            ),
         ],
     )
     return build(session, Workspace(directory=str(tmp_path)))
@@ -25,8 +30,14 @@ def sample(tmp_path):
 
 def test_the_document_carries_what_the_next_agent_needs(tmp_path):
     text = render.markdown(sample(tmp_path), transcript_path="/x/t.json")
-    for heading in ("# Handoff", "## What was asked", "## Files this session changed",
-                    "## Commands it ran", "## Next step", "## The full transcript"):
+    for heading in (
+        "# Handoff",
+        "## What was asked",
+        "## Files this session changed",
+        "## Commands it ran",
+        "## Next step",
+        "## The full transcript",
+    ):
         assert heading in text
     assert "fix the parser" in text
     assert "`src/p.py`" in text
@@ -107,8 +118,7 @@ def test_install_links_the_skill_only_into_harnesses_that_exist(tmp_path):
     absent = tmp_path / ".nothing" / "skills"
 
     results = {
-        name: outcome
-        for name, outcome, _ in install_mod.install({"claude": present, "ghost": absent})
+        name: outcome for name, outcome, _ in install_mod.install({"claude": present, "ghost": absent})
     }
     assert results == {"claude": "linked", "ghost": "skipped"}
     assert (present / "session-handoff" / "SKILL.md").is_file()
@@ -131,13 +141,17 @@ def test_install_is_idempotent_and_never_clobbers_a_real_directory(tmp_path):
 def test_private_handoffs_stay_outside_project_and_redact_credentials(tmp_path, monkeypatch):
     import os
     import stat
+
     from baton.model import Turn
+
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     brief = sample(project)
     credential = "ghp_" + "a" * 36
-    brief.session.turns.append(Turn(role="user", text=f"Authorization: Bearer {credential} password=private-example"))
+    brief.session.turns.append(
+        Turn(role="user", text=f"Authorization: Bearer {credential} password=private-example")
+    )
     brief = build(brief.session, brief.workspace)
     old_umask = os.umask(0)
     try:
@@ -165,3 +179,21 @@ def test_explicit_export_does_not_follow_preexisting_file_symlinks(tmp_path):
     paths = pack.write(brief, str(tmp_path), str(output))
     assert target.read_text() == "keep"
     assert Path(paths["latest"]).resolve() == Path(paths["document"])
+
+
+def test_diffstat_includes_staged_changes_not_just_unstaged(tmp_path):
+    import subprocess
+
+    from baton.workspace import inspect
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=tmp_path, check=True)
+    (tmp_path / "a.txt").write_text("one")
+    subprocess.run(["git", "add", "a.txt"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-qm", "first"], cwd=tmp_path, check=True)
+    (tmp_path / "a.txt").write_text("two")
+    subprocess.run(["git", "add", "a.txt"], cwd=tmp_path, check=True)  # staged only, no unstaged diff
+
+    space = inspect(str(tmp_path))
+    assert space.diffstat and "a.txt" in space.diffstat

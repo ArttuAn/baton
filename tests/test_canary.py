@@ -30,14 +30,17 @@ class FakeReader:
 def turns(count, *, tools=True, text=True, ts=True):
     out = []
     for index in range(count):
-        out.append(Turn(role="user", text=f"ask {index}", ts="2026-01-01" if ts else None,
-                        meta={"synthetic": False}))
-        out.append(Turn(
-            role="assistant",
-            text="working on it" if text else "",
-            ts="2026-01-01" if ts else None,
-            tools=[ToolCall(kind="run", name="Bash", command="pytest")] if tools else [],
-        ))
+        out.append(
+            Turn(role="user", text=f"ask {index}", ts="2026-01-01" if ts else None, meta={"synthetic": False})
+        )
+        out.append(
+            Turn(
+                role="assistant",
+                text="working on it" if text else "",
+                ts="2026-01-01" if ts else None,
+                tools=[ToolCall(kind="run", name="Bash", command="pytest")] if tools else [],
+            )
+        )
     return out
 
 
@@ -105,9 +108,14 @@ def brief_for(tmp_path):
         ref=SessionRef(harness="claude", id="s1", directory=str(tmp_path), title="Fix the parser"),
         turns=[
             Turn(role="user", text="fix the parser", meta={"synthetic": False}),
-            Turn(role="assistant", text="done",
-                 tools=[ToolCall(kind="edit", name="Edit", path="src/p.py"),
-                        ToolCall(kind="run", name="Bash", command="pytest -q", ok=False)]),
+            Turn(
+                role="assistant",
+                text="done",
+                tools=[
+                    ToolCall(kind="edit", name="Edit", path="src/p.py"),
+                    ToolCall(kind="run", name="Bash", command="pytest -q", ok=False),
+                ],
+            ),
         ],
     )
     return build(body, Workspace(directory=str(tmp_path)))

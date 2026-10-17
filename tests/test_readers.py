@@ -17,17 +17,39 @@ def test_claude_reader_keeps_typed_prompts_and_drops_injected_text(tmp_path, mon
     file = write_transcript(
         tmp_path,
         [
-            {"type": "user", "cwd": "/work/proj", "timestamp": "t0", "origin": {"kind": "human"},
-             "message": {"role": "user", "content": "do the work"}},
-            {"type": "user", "message": {"role": "user", "content": [
-                {"type": "text", "text": "<system-reminder>ignore me</system-reminder>"}]}},
-            {"type": "assistant", "timestamp": "t1", "message": {"role": "assistant", "model": "opus",
-             "content": [
-                {"type": "text", "text": "on it"},
-                {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "pytest"}},
-             ]}},
-            {"type": "user", "message": {"role": "user", "content": [
-                {"type": "tool_result", "tool_use_id": "t1", "is_error": True}]}},
+            {
+                "type": "user",
+                "cwd": "/work/proj",
+                "timestamp": "t0",
+                "origin": {"kind": "human"},
+                "message": {"role": "user", "content": "do the work"},
+            },
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "<system-reminder>ignore me</system-reminder>"}],
+                },
+            },
+            {
+                "type": "assistant",
+                "timestamp": "t1",
+                "message": {
+                    "role": "assistant",
+                    "model": "opus",
+                    "content": [
+                        {"type": "text", "text": "on it"},
+                        {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "pytest"}},
+                    ],
+                },
+            },
+            {
+                "type": "user",
+                "message": {
+                    "role": "user",
+                    "content": [{"type": "tool_result", "tool_use_id": "t1", "is_error": True}],
+                },
+            },
         ],
     )
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
@@ -75,8 +97,15 @@ def build_opencode_db(path):
     )
     db.execute(
         "insert into part (id, message_id, session_id, time_created, data) values ('p2','msg_1','ses_1',2,?)",
-        (json.dumps({"type": "tool", "tool": "edit",
-                     "state": {"status": "completed", "input": {"filePath": "src/p.py"}}}),),
+        (
+            json.dumps(
+                {
+                    "type": "tool",
+                    "tool": "edit",
+                    "state": {"status": "completed", "input": {"filePath": "src/p.py"}},
+                }
+            ),
+        ),
     )
     db.commit()
     db.close()
@@ -103,6 +132,38 @@ def test_opencode_reader_filters_by_project_directory(tmp_path, monkeypatch):
     build_opencode_db(data / "opencode.db")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     assert opencode.list_sessions("/somewhere/else") == []
+
+
+def test_opencode_reader_excludes_sessions_with_no_directory_when_filtering(tmp_path, monkeypatch):
+    data = tmp_path / "opencode"
+    data.mkdir()
+    build_opencode_db(data / "opencode.db")
+    db = sqlite3.connect(data / "opencode.db")
+    db.execute(
+        "insert into session (id, directory, title, time_created, time_updated) values ('ses_null', null, 'orphan', 3000, 4000)"
+    )
+    db.commit()
+    db.close()
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert [ref.id for ref in opencode.list_sessions("/work/proj")] == ["ses_1"]
+
+
+def test_opencode_load_survives_malformed_json_rows(tmp_path, monkeypatch):
+    data = tmp_path / "opencode"
+    data.mkdir()
+    build_opencode_db(data / "opencode.db")
+    db = sqlite3.connect(data / "opencode.db")
+    db.execute(
+        "insert into message (id, session_id, time_created, data) values ('msg_bad','ses_1',1500,'{not json')"
+    )
+    db.execute(
+        "insert into part (id, message_id, session_id, time_created, data) values ('p_bad','msg_1','ses_1',3,'also not json')"
+    )
+    db.commit()
+    db.close()
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    session = opencode.load(opencode.list_sessions("/work/proj")[0])
+    assert session.turns[0].text == "fix the parser"
 
 
 def test_readers_return_nothing_when_a_store_is_missing(tmp_path, monkeypatch):

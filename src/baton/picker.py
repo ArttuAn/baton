@@ -60,11 +60,11 @@ def pick(timeout: int = 60) -> Picked:
         owner |= _mapped()
     finally:
         for wid, pid in _mapped().items():
-            if wid in before:
+            if wid in before and pid in ttys:  # a stale probe from a crashed run is not ours to restore
                 _retitle(ttys[pid], before[wid])
 
     pid = owner.get(clicked)
-    if pid is None:
+    if pid not in agents:  # None, or a dead pid left behind by a stale probe
         raise BatonError(
             "that window has no other agent session in it — or its session is in a background tab "
             "(bring the tab to front and pick again)"
@@ -78,7 +78,10 @@ def _mapped() -> dict[str, int]:
 
 
 def _resolve(pid: int, harness: str, title: str) -> Picked:
-    directory = os.readlink(f"/proc/{pid}/cwd")
+    try:
+        directory = os.readlink(f"/proc/{pid}/cwd")
+    except OSError:
+        raise BatonError("that agent process has already exited") from None
     session_id = None
     if harness == "claude":
         record = CLAUDE_SESSIONS / f"{pid}.json"
