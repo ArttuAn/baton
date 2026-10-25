@@ -2,6 +2,8 @@
 
 import re
 
+_SECRET_NAME = r"(?:api[_-]?key|client[_-]?secret|password|passwd|secret|token|access[_-]?token|refresh[_-]?token|access[_-]?key|secret[_-]?access[_-]?key|authorization|cookie|private[_-]?key|database[_-]?url|connection[_-]?string)"
+
 _PATTERNS = [
     (
         re.compile(
@@ -17,9 +19,16 @@ _PATTERNS = [
     ),
     (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"), "[REDACTED JWT]"),
     (re.compile(r"(?i)(\bbearer\s+)[A-Za-z0-9._~+/-]+=*"), r"\1[REDACTED]"),
+    (re.compile(r"(?im)(\b(?:authorization|proxy-authorization)\s*:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+    (re.compile(r"(?im)(\b(?:cookie|set-cookie)\s*:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+    (re.compile(r"([A-Za-z][A-Za-z0-9+.-]*://)[^/\s@]+@"), r"\1[REDACTED]@"),
+    (
+        re.compile(rf"(?is)(\b{_SECRET_NAME}[\"']?\s*[:=]\s*)([\"'])(?:\\.|(?!\2).)*(?:\2|$)"),
+        r"\1\2[REDACTED]\2",
+    ),
     (
         re.compile(
-            r"""(?i)(\b(?:api[_-]?key|client[_-]?secret|password|secret|token|access[_-]?key|secret[_-]?access[_-]?key)["']?\s*[:=]\s*["']?)[^\s"'`,;]+"""
+            rf"""(?i)(\b{_SECRET_NAME}["']?\s*[:=]\s*["']?)[^\s"'`,;]+"""
         ),
         r"\1[REDACTED]",
     ),
@@ -29,7 +38,9 @@ _PATTERNS = [
 def redact_text(text: str) -> str:
     for pattern, replacement in _PATTERNS:
         text = pattern.sub(replacement, text)
-    return text
+    # Session titles and tool output can contain terminal escape sequences.
+    return re.sub(r"[\x00-\x08\x0b-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]",
+                  lambda match: f"\\u{ord(match.group()):04x}", text)
 
 
 def redact_payload(value):
@@ -47,6 +58,13 @@ def redact_payload(value):
             "accesstoken",
             "refreshtoken",
             "secretaccesskey",
+            "authorization",
+            "proxyauthorization",
+            "cookie",
+            "setcookie",
+            "privatekey",
+            "databaseurl",
+            "connectionstring",
         }
         return {
             key: "[REDACTED]"

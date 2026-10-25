@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 from . import install, pack, picker
 from .pack import BatonError
+from .privacy import redact_text
 
 USAGE = "baton <doctor|sessions|pick|pack|resume|handoff>"
 
@@ -111,7 +113,7 @@ def cmd_doctor(args) -> int:
         launch = "launchable" if info.get("cli") else f"no `{name}` on PATH"
         print(f"{name:<9} {read:<16} {launch}")
         if info.get("error"):
-            print(f"{'':<9} {info['error']}")
+            print(redact_text(f"{'':<9} {info['error']}"))
         if args.quick or not info.get("readable") or not info.get("sessions"):
             continue
         check = pack.probe(name)
@@ -146,9 +148,9 @@ def cmd_sessions(args) -> int:
         print(f"no sessions recorded for {args.dir}")
         return 0
     for ref in refs:
-        title = (ref.title or "").strip().replace("\n", " ")[:52]
+        title = redact_text(ref.title or "").strip().replace("\n", " ")[:52]
         count = f"{ref.messages}m" if ref.messages is not None else "?"
-        print(f"{ref.updated or '?':<22} {ref.harness:<9} {count:>6}  {ref.id[:28]:<30} {title}")
+        print(redact_text(f"{ref.updated or '?':<22} {ref.harness:<9} {count:>6}  {ref.id[:28]:<30} {title}"))
     return 0
 
 
@@ -202,16 +204,12 @@ def cmd_handoff(args) -> int:
 
 
 def _launch(command: list[str], args) -> int:
-    printable = " ".join(_quote(part) for part in command)
+    printable = shlex.join(command)
     if args.dry_run:
-        print(printable)
+        print(redact_text(printable))
         return 0
-    print(f"$ {printable}")
+    print(redact_text(f"$ {printable}"))
     try:
         return subprocess.call(command, cwd=args.dir)
     except OSError as error:
         raise BatonError(f"could not start {command[0]}: {error}") from error
-
-
-def _quote(part: str) -> str:
-    return f'"{part}"' if " " in part else part

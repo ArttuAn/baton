@@ -7,6 +7,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..handoff import opening_prompt
 from ..model import Session, SessionRef, ToolCall, Turn
 
 NAME = "claude"
@@ -53,6 +54,8 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
         for file in folder.glob("*.jsonl"):
             head = _peek(file)
             if head is None:
+                continue
+            if directory and (not head.get("cwd") or Path(head["cwd"]).resolve() != Path(directory).resolve()):
                 continue
             refs.append(
                 SessionRef(
@@ -178,4 +181,4 @@ def resume_command(brief_path: str, directory: str | None) -> list[str]:
 
 
 def _opening_prompt(brief_path: str) -> str:
-    return f"Read {brief_path} — it is a handoff from another agent. Follow its Next step section."
+    return opening_prompt(brief_path)

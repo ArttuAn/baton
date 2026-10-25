@@ -6,6 +6,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..handoff import opening_prompt
 from ..model import Session, SessionRef, ToolCall, Turn
 
 NAME = "codex"
@@ -117,4 +118,4 @@ def _tool_call(payload: dict) -> ToolCall:
 
 
 def resume_command(brief_path: str, directory: str | None) -> list[str]:
-    return [CLI, f"Read {brief_path} — it is a handoff from another agent. Follow its Next step section."]
+    return [CLI, opening_prompt(brief_path)]

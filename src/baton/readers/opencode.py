@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..handoff import opening_prompt
 from ..model import Session, SessionRef, ToolCall, Turn
 
 NAME = "opencode"
@@ -39,7 +41,7 @@ def _connect() -> sqlite3.Connection | None:
     if not path.exists():
         return None
     # Read-only: opencode may well be running against this same file.
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    return sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
 
 
 def _stamp(millis) -> str | None:
@@ -66,7 +68,7 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
     db = _connect()
     if db is None:
         return []
-    with db:
+    with closing(db):
         rows = db.execute(
             "select id, directory, title, time_updated,"
             " (select count(*) from message where message.session_id = session.id)"
@@ -97,7 +99,7 @@ def load(ref: SessionRef) -> Session:
     db = _connect()
     if db is None:
         return session
-    with db:
+    with closing(db):
         row = db.execute(
             "select model, time_created, time_updated from session where id = ?", (ref.id,)
         ).fetchone()
@@ -171,6 +173,6 @@ def _tool_call(part: dict) -> ToolCall:
 
 
 def resume_command(brief_path: str, directory: str | None) -> list[str]:
-    prompt = f"Read {brief_path} — it is a handoff from another agent. Follow its Next step section."
+    prompt = opening_prompt(brief_path)
     # opencode takes the project directory as a positional, not a flag.
     return [CLI, *([directory] if directory else []), "--prompt", prompt]

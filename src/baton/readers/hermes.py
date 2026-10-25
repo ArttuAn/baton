@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..handoff import opening_prompt
 from ..model import Session, SessionRef, ToolCall, Turn
 
 NAME = "hermes"
@@ -42,14 +44,14 @@ def _connect() -> sqlite3.Connection | None:
     path = db_path()
     if not path.exists():
         return None
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    return sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True)
 
 
 def list_sessions(directory: str | None = None) -> list[SessionRef]:
     db = _connect()
     if db is None:
         return []
-    with db:
+    with closing(db):
         rows = db.execute(
             "select id, cwd, title, last_activity_at, message_count from sessions"
             " order by coalesce(last_activity_at, started_at) desc"
@@ -79,7 +81,7 @@ def load(ref: SessionRef) -> Session:
     db = _connect()
     if db is None:
         return session
-    with db:
+    with closing(db):
         row = db.execute(
             "select model, started_at, last_activity_at, end_reason from sessions where id = ?", (ref.id,)
         ).fetchone()
@@ -143,7 +145,7 @@ def _tool_calls(raw, fallback_name) -> list[ToolCall]:
 
 
 def resume_command(brief_path: str, directory: str | None) -> list[str]:
-    prompt = f"Read {brief_path} — it is a handoff from another agent. Follow its Next step section."
+    prompt = opening_prompt(brief_path)
     cmd = [CLI, prompt]
     if directory:
         cmd += ["--in", directory]

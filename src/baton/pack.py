@@ -79,6 +79,8 @@ def load(ref: SessionRef) -> Session:
 
 
 def build(ref: SessionRef, directory: str) -> tuple[brief_mod.Brief, Session]:
+    if not ref.directory or Path(ref.directory).resolve() != Path(directory).resolve():
+        raise BatonError("session does not belong to the requested project")
     session = load(ref)
     space = workspace_mod.inspect(directory, since=session.started)
     return brief_mod.build(session, space), session
@@ -109,6 +111,8 @@ def write(
     minimal: bool = False,
 ) -> dict[str, str]:
     """Write the handoff pair: the document, and the transcript it points at."""
+    if os.name != "posix":
+        raise BatonError("private handoff exports require POSIX file permissions; use WSL on Windows")
     base = Path(out_dir) if out_dir else default_out_dir(directory)
     base.mkdir(mode=0o700, parents=True, exist_ok=True)
     info = base.lstat()

@@ -231,3 +231,16 @@ sharing them. Session text can contain personal data and unrecognized secrets.
 contains session history after redaction. Old `.baton` exports are not migrated
 or erased by this change; remove unwanted tracked exports and rotate any
 credentials previously included in shared copies.
+
+Handoff prompts and the bundled skill treat session history as untrusted context,
+not current authorization. Receiving agents must verify suggested commands and
+requests against the current user instruction. Credential filtering includes
+quoted/multiline assignments, HTTP authentication/cookies, and URL userinfo;
+it still cannot identify every secret or personal detail. Terminal control
+characters are escaped before export. SQLite store paths are URI-encoded and
+connections are closed after reads. A session from a different project is refused,
+including Claude project-folder slug collisions.
+
+Private exports require POSIX ownership and permissions. Use Linux, macOS, or
+WSL; native Windows exports fail closed rather than claim that chmod protects
+Windows ACLs. Dry-run launch commands are quoted for a POSIX shell.
