@@ -2,8 +2,8 @@
 
 Baton is a local CLI running with the invoking user's filesystem permissions.
 It is not a multi-user service or a filesystem sandbox. `CLAUDE_CONFIG_DIR`,
-`XDG_DATA_HOME`, and `XDG_STATE_HOME` are trusted operator configuration: choosing
-these locations deliberately selects where Baton reads or stores session data.
+`CODEX_HOME`, `XDG_DATA_HOME`, and `XDG_STATE_HOME` are trusted operator configuration:
+choosing these locations deliberately selects where Baton reads or stores session data.
 Do not expose environment settings or `--dir`, `--out`, and `--pack` directly to
 untrusted remote callers. A service wrapper must impose its own allowlist.
 
@@ -16,9 +16,9 @@ exports before sharing them, and rotate credentials exposed in older exports.
 
 ## Static-analysis triage
 
-The October 2026 CodeQL `py/path-injection` findings sourced from the three
-environment variables above describe intentional local configuration, rather
-than an untrusted remote path crossing an authorization boundary. Findings in
+The October 2026 CodeQL `py/path-injection` findings sourced from the environment
+variables above describe intentional local configuration, rather than an
+untrusted remote path crossing an authorization boundary. Findings in
 tests follow those same functions into synthetic, temporary fixtures. Tests
 isolate all session stores from the developer's real home directory.
 

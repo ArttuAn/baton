@@ -13,8 +13,6 @@ from . import install, pack, picker
 from .pack import BatonError
 from .privacy import redact_text
 
-USAGE = "baton <doctor|sessions|pick|pack|resume|handoff>"
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="baton", description=__doc__)
@@ -99,6 +97,8 @@ def _apply_pick(args) -> None:
 
 
 def cmd_pick(args) -> int:
+    if args.timeout < 1:
+        raise BatonError("--timeout must be a positive integer")
     chosen = picker.pick(args.timeout)
     print(
         f"{chosen.harness} {chosen.session_id or '?'} {chosen.directory}  # pid {chosen.pid} · {chosen.title}"
@@ -143,6 +143,8 @@ def cmd_doctor(args) -> int:
 
 
 def cmd_sessions(args) -> int:
+    if args.limit < 1:
+        raise BatonError("--limit must be a positive integer")
     refs = pack.sessions_for(args.dir)[: args.limit]
     if not refs:
         print(f"no sessions recorded for {args.dir}")

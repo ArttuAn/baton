@@ -16,7 +16,7 @@
   <img alt="Zero dependencies" src="https://img.shields.io/badge/runtime-zero%20dependencies-1f2937">
   <img alt="No model calls" src="https://img.shields.io/badge/model%20calls-none-16a34a?logo=ghostery&logoColor=white">
   <img alt="Offline" src="https://img.shields.io/badge/network-offline%20capable-0ea5e9?logo=wifi&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-34%20passing-16a34a?logo=pytest&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-74%20passing-16a34a?logo=pytest&logoColor=white">
   <img alt="Lint" src="https://img.shields.io/badge/ruff-clean-261230?logo=ruff&logoColor=white">
   <img alt="Harnesses" src="https://img.shields.io/badge/harnesses-4-7c3aed">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
@@ -100,6 +100,7 @@ files, treat the old agent's work as done — and **its claims as claims**.
 baton doctor                  # which harnesses are readable, launchable, and still parse
 baton doctor --quick          # ...without parsing real sessions
 baton sessions                # every session for this project, any harness, newest first
+baton pick                    # click a terminal window to choose its live session
 baton continue                # print the handoff for the last real session
 baton pack                    # write a private handoff outside the project
 baton handoff opencode        # pack the live session and open it in opencode
@@ -113,6 +114,7 @@ baton resume claude           # later: come back to Claude on the same handoff
 | `--session <id>` | Pick a specific session (id or prefix) |
 | `--dry-run` | Print the launch command instead of running it |
 | `--out <dir>` | Choose an explicit export directory (contains private session data) |
+| `--pick` | Choose the source session by clicking its terminal window (X11 required) |
 | `--minimal` | Only what the repo cannot say itself — see below |
 
 `baton` skips one-turn stub sessions when it picks "the last session" — a launch
@@ -203,7 +205,7 @@ Everything downstream of `readers/` works on one normalized `Session`.
 ## 🧪 Develop
 
 ```sh
-.venv/bin/python -m pytest -q     # 34 tests
+.venv/bin/python -m pytest -q     # 74 tests
 .venv/bin/ruff check .            # clean
 ```
 

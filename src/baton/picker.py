@@ -26,7 +26,6 @@ from .pack import BatonError
 HARNESSES = ("claude", "opencode", "codex", "hermes")
 PROBE = "baton-pick #{pid}"
 PROBE_RE = re.compile(r"baton-pick #(\d+)")
-CLAUDE_SESSIONS = Path.home() / ".claude" / "sessions"
 SETTLE = 0.25  # seconds for the terminal to apply the retitle
 ROUNDS = 3
 
@@ -77,6 +76,12 @@ def _mapped() -> dict[str, int]:
     return {wid: int(m.group(1)) for wid, t in _titles().items() if (m := PROBE_RE.search(t))}
 
 
+def _claude_sessions() -> Path:
+    """Same config directory the Claude reader uses, resolved at call time."""
+    config = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
+    return config / "sessions"
+
+
 def _resolve(pid: int, harness: str, title: str) -> Picked:
     try:
         directory = os.readlink(f"/proc/{pid}/cwd")
@@ -84,10 +89,14 @@ def _resolve(pid: int, harness: str, title: str) -> Picked:
         raise BatonError("that agent process has already exited") from None
     session_id = None
     if harness == "claude":
-        record = CLAUDE_SESSIONS / f"{pid}.json"
-        if record.exists():
-            data = json.loads(record.read_text())
-            session_id, directory = data.get("sessionId"), data.get("cwd") or directory
+        record = _claude_sessions() / f"{pid}.json"
+        try:
+            if record.exists():
+                data = json.loads(record.read_text())
+                if isinstance(data, dict):
+                    session_id, directory = data.get("sessionId"), data.get("cwd") or directory
+        except (OSError, ValueError):
+            pass  # a half-written or malformed record is not worth losing the pick
     if not session_id:
         session_id = _by_title(directory, harness, title)
     return Picked(harness, pid, directory, session_id, title)

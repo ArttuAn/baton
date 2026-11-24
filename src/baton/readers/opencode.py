@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
@@ -19,11 +20,13 @@ TOOL_KINDS = {
     "edit": "edit",
     "write": "edit",
     "patch": "edit",
+    "apply_patch": "edit",
     "read": "read",
     "bash": "run",
     "grep": "search",
     "glob": "search",
     "webfetch": "search",
+    "websearch": "search",
     "task": "task",
     "todowrite": "todo",
     "skill": "skill",
@@ -162,14 +165,23 @@ def _tool_call(part: dict) -> ToolCall:
     state = part.get("state") or {}
     args = state.get("input") or {}
     status = state.get("status")
+    path = args.get("filePath") or args.get("file_path") or args.get("path")
+    if not path and tool == "apply_patch":
+        path = _patch_path(args.get("patchText") or "")
     return ToolCall(
         kind=TOOL_KINDS.get(tool, "other"),
         name=tool,
-        path=args.get("filePath") or args.get("file_path") or args.get("path"),
+        path=path,
         command=args.get("command"),
         ok=None if status in (None, "running", "pending") else status == "completed",
         extra={"todos": args["todos"]} if tool == "todowrite" and args.get("todos") else {},
     )
+
+
+def _patch_path(text: str) -> str | None:
+    """apply_patch carries the file path inside its patch text, not in an argument."""
+    match = re.search(r"^\*\*\* (?:Update|Add|Delete) File: (.+?)\s*$", text, re.MULTILINE)
+    return match.group(1) if match else None
 
 
 def resume_command(brief_path: str, directory: str | None) -> list[str]:
