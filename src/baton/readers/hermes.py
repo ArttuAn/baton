@@ -18,11 +18,14 @@ TOOL_KINDS = {
     "edit_file": "edit",
     "write_file": "edit",
     "apply_patch": "edit",
+    "patch": "edit",
     "read_file": "read",
     "bash": "run",
     "shell": "run",
+    "terminal": "run",
     "run_command": "run",
     "grep": "search",
+    "search_files": "search",
 }
 
 

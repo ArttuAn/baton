@@ -32,9 +32,9 @@ PATH_TOKEN = re.compile(r"[~\w./@-]*[\w-]+\.[A-Za-z][\w]{0,5}")
 PATH_NOISE = re.compile(r"node_modules|/\.git/|\.lock$|^https?://|\.bak$|^/tmp/|/scratchpad/")
 
 # `cd somewhere && …` — relative paths in later commands hang off this.
-CD = re.compile(r"(?:^|&&|;)\s*cd\s+([~\w./@-]+)")
+CD = re.compile(r"(?:^|&&|\|\||[;|&])\s*cd\s+([~\w./@-]+)", re.MULTILINE)
 
-HEREDOC = re.compile(r"<<-?\s*'?(\w+)'?\s*$")
+HEREDOC = re.compile(r"<<-?\s*'?(\w+)'?")
 
 # Does this command write files, or only look at them?
 WRITE_HINT = re.compile(
@@ -221,16 +221,38 @@ def _display(path: Path, base: Path) -> str:
 
 
 def _todos(calls: list[ToolCall]) -> list[dict]:
-    """The agent's own live plan — the last one it wrote is the most honest."""
-    for call in reversed(calls):
-        todos = call.extra.get("todos")
-        if todos:
-            return [
-                {"content": item.get("content") or item.get("task") or "", "status": item.get("status") or ""}
-                for item in todos
-                if isinstance(item, dict)
-            ]
-    return []
+    """The agent's own live plan — a full plan wins, task tools accumulate by id."""
+    written = [call for call in calls if call.name in {"TodoWrite", "todowrite"} and call.extra.get("todos")]
+    if written:
+        return _todo_rows(written[-1].extra["todos"])
+    merged: dict[str, dict] = {}
+    for call in calls:
+        for item in call.extra.get("todos") or []:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content") or item.get("task") or item.get("subject") or item.get("description")
+            key = str(item.get("taskId") or item.get("id") or content or "")
+            if not key:
+                continue
+            current = merged.setdefault(key, {"content": "", "status": ""})
+            current["content"] = content or current["content"]
+            current["status"] = item.get("status") or current["status"]
+    return _todo_rows(list(merged.values()))
+
+
+def _todo_rows(items) -> list[dict]:
+    return [
+        {
+            "content": item.get("content")
+            or item.get("task")
+            or item.get("subject")
+            or item.get("description")
+            or "",
+            "status": item.get("status") or "",
+        }
+        for item in items
+        if isinstance(item, dict)
+    ]
 
 
 def _stopped_because(session: Session, last_words: str) -> str | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,7 +15,7 @@ CLI = "codex"
 
 
 def root() -> Path:
-    return Path.home() / ".codex" / "sessions"
+    return Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "sessions"
 
 
 def _stamp(epoch: float) -> str:

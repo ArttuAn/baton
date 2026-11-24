@@ -63,8 +63,15 @@ def pick(directory: str, harness: str | None = None, session_id: str | None = No
     refs = sessions_for(directory, [harness] if harness else None)
     if session_id:
         for ref in refs:
-            if ref.id == session_id or ref.id.startswith(session_id):
+            if ref.id == session_id:
                 return ref
+        matches = [ref for ref in refs if ref.id.startswith(session_id)]
+        if len(matches) == 1:
+            return matches[0]
+        if matches:
+            raise BatonError(
+                f"ambiguous session {session_id!r} — matches {', '.join(ref.id for ref in matches)}"
+            )
         raise BatonError(f"no session {session_id!r} for {directory}")
     if not refs:
         raise BatonError(f"no sessions found for {directory} — run `baton doctor` to see what is readable")
@@ -103,6 +110,40 @@ def _private_write(path: Path, text: str) -> None:
             os.unlink(temporary)
 
 
+def _private_directory(base: Path, root: Path | None = None) -> None:
+    """Create and tighten every private ancestor.
+
+    Path.mkdir(mode=..., parents=True) applies the mode only to the leaf, which
+    left the state root and its parent world-readable under a permissive umask.
+    """
+    missing: list[Path] = []
+    cursor = base
+    while not cursor.exists() and cursor.parent != cursor:
+        missing.append(cursor)
+        cursor = cursor.parent
+    for directory in reversed(missing):
+        directory.mkdir(mode=0o700)
+
+    chain = [base]
+    if root is not None:
+        try:
+            relative = base.relative_to(root)
+        except ValueError:
+            relative = None
+        if relative is not None:
+            chain = [root]
+            cursor = root
+            for part in relative.parts:
+                cursor = cursor / part
+                chain.append(cursor)
+
+    for directory in chain:
+        info = directory.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+            raise BatonError("handoff directory must be owned by the current user and cannot be a symlink")
+        directory.chmod(0o700)
+
+
 def write(
     brief: brief_mod.Brief,
     directory: str,
@@ -114,11 +155,8 @@ def write(
     if os.name != "posix":
         raise BatonError("private handoff exports require POSIX file permissions; use WSL on Windows")
     base = Path(out_dir) if out_dir else default_out_dir(directory)
-    base.mkdir(mode=0o700, parents=True, exist_ok=True)
-    info = base.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-        raise BatonError("handoff directory must be owned by the current user and cannot be a symlink")
-    base.chmod(0o700)
+    root = None if out_dir else Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    _private_directory(base, root)
     stamp = datetime.now(UTC).astimezone().strftime("%Y%m%d-%H%M%S")
     slug = f"handoff-{brief.session.harness}-{stamp}-{uuid.uuid4().hex[:8]}"
     transcript = base / f"{slug}.transcript.json"

@@ -3,6 +3,7 @@
 import re
 
 _SECRET_NAME = r"(?:api[_-]?key|client[_-]?secret|password|passwd|secret|token|access[_-]?token|refresh[_-]?token|access[_-]?key|secret[_-]?access[_-]?key|authorization|cookie|private[_-]?key|database[_-]?url|connection[_-]?string)"
+_SECRET_KEY = re.compile(_SECRET_NAME)
 
 _PATTERNS = [
     (
@@ -49,26 +50,11 @@ def redact_payload(value):
     if isinstance(value, list):
         return [redact_payload(item) for item in value]
     if isinstance(value, dict):
-        secret_keys = {
-            "apikey",
-            "clientsecret",
-            "password",
-            "secret",
-            "token",
-            "accesstoken",
-            "refreshtoken",
-            "secretaccesskey",
-            "authorization",
-            "proxyauthorization",
-            "cookie",
-            "setcookie",
-            "privatekey",
-            "databaseurl",
-            "connectionstring",
-        }
+        # Use the same secret-name vocabulary as text redaction, so keys such as
+        # x-api-key, auth-token or passwd cannot slip through a hand-maintained list.
         return {
             key: "[REDACTED]"
-            if re.sub(r"[^a-z0-9]", "", str(key).lower()) in secret_keys
+            if _SECRET_KEY.search(re.sub(r"[^a-z0-9]", "", str(key).lower()))
             else redact_payload(item)
             for key, item in value.items()
         }

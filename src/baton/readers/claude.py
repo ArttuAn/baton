@@ -26,6 +26,8 @@ TOOL_KINDS = {
     "Task": "task",
     "Agent": "task",
     "TodoWrite": "todo",
+    "TaskCreate": "todo",
+    "TaskUpdate": "todo",
 }
 
 
@@ -167,12 +169,23 @@ def load(ref: SessionRef) -> Session:
 def _tool_call(block: dict) -> ToolCall:
     name = block.get("name") or "?"
     args = block.get("input") or {}
+    extra = {}
+    if name == "TodoWrite" and args.get("todos"):
+        extra["todos"] = args["todos"]
+    elif name in ("TaskCreate", "TaskUpdate") and args:
+        extra["todos"] = [
+            {
+                "taskId": str(args.get("taskId") or args.get("id") or ""),
+                "content": args.get("subject") or args.get("description") or args.get("task") or "",
+                "status": args.get("status") or ("pending" if name == "TaskCreate" else ""),
+            }
+        ]
     return ToolCall(
         kind=TOOL_KINDS.get(name, "other"),
         name=name,
         path=args.get("file_path") or args.get("path") or args.get("notebook_path"),
         command=args.get("command"),
-        extra={"todos": args["todos"]} if name == "TodoWrite" and args.get("todos") else {},
+        extra=extra,
     )
 
 
