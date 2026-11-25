@@ -40,14 +40,21 @@ def install(targets: dict[str, Path] | None = None) -> list[tuple[str, str, str]
         link = directory / SKILL_NAME
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            if link.is_symlink() or link.exists():
-                if link.is_symlink() and link.readlink() == skill:
+            if link.is_symlink():
+                try:
+                    same = link.resolve() == skill
+                except (OSError, RuntimeError):
+                    same = False
+                if same:
                     results.append((name, "already linked", str(link)))
                     continue
-                if not link.is_symlink():
-                    results.append((name, "left alone", f"{link} exists and is not a symlink"))
+                if link.exists():  # a user's own symlink: never clobber it
+                    results.append((name, "left alone", f"{link} is an unrelated symlink"))
                     continue
-                link.unlink()
+                link.unlink()  # broken symlink: safe to replace
+            elif link.exists():
+                results.append((name, "left alone", f"{link} exists and is not a symlink"))
+                continue
             link.symlink_to(skill, target_is_directory=True)
             results.append((name, "linked", str(link)))
         except OSError as error:

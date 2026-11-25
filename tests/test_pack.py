@@ -65,7 +65,7 @@ def test_resume_commands_carry_the_handoff_into_each_harness(tmp_path, monkeypat
     monkeypatch.setattr(pack.shutil, "which", lambda name: f"/usr/bin/{name}")
     for harness in ("claude", "opencode", "codex", "hermes"):
         command = pack.resume_command(harness, "/x/handoff.md", str(tmp_path))
-        assert command[0] == harness
+        assert command[0] == f"/usr/bin/{harness}"  # launch the binary we checked
         assert any("/x/handoff.md" in part for part in command)
 
 

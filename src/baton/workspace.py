@@ -21,7 +21,8 @@ class Workspace:
 def _git(directory: str, *args: str) -> str | None:
     try:
         done = subprocess.run(
-            ["git", "-C", directory, *args],
+            # Read-only inspection must not execute hooks configured by a checkout.
+            ["git", "-c", "core.fsmonitor=false", "-C", directory, *args],
             capture_output=True,
             encoding="utf-8",
             errors="replace",

@@ -160,11 +160,35 @@ def _merge(*groups: list[str]) -> list[str]:
     return list(seen)
 
 
+def _unquote_git_path(path: str) -> str:
+    """Decode the C-style quoting git uses for unusual filenames."""
+    if not (path.startswith('"') and path.endswith('"')):
+        return path
+    out: list[str] = []
+    raw = path[1:-1]
+    index = 0
+    while index < len(raw):
+        if raw[index] == "\\" and index + 1 < len(raw):
+            char = raw[index + 1]
+            if char in ('"', "\\"):
+                out.append(char)
+                index += 2
+                continue
+            octal = raw[index + 1 : index + 4]
+            if len(octal) == 3 and all(digit in "01234567" for digit in octal):
+                out.append(chr(int(octal, 8)))
+                index += 4
+                continue
+        out.append(raw[index])
+        index += 1
+    return "".join(out)
+
+
 def _dirty_paths(workspace: Workspace) -> list[str]:
     """Git is the ground truth for what actually changed."""
     paths = []
     for line in workspace.dirty:
-        path = line[3:].strip().strip('"')
+        path = _unquote_git_path(line[3:].strip())
         if "->" in path:  # a rename: take the destination
             path = path.split("->")[-1].strip()
         if path:
@@ -185,7 +209,10 @@ def _mined_paths(calls: list[ToolCall], workspace: Workspace) -> tuple[list[str]
     for call in calls:
         if call.kind != "run" or not call.command:
             continue
-        for match in CD.finditer(call.command):
+        # Heredoc bodies are data, not shell: a `cd` or path inside one must not
+        # move the working directory or mark a file as edited.
+        shell = "\n".join(_split_shell(call.command.splitlines())[0])
+        for match in CD.finditer(shell):
             try:
                 target = Path(match.group(1)).expanduser()
             except RuntimeError:  # "~name" with no such user
@@ -196,8 +223,8 @@ def _mined_paths(calls: list[ToolCall], workspace: Workspace) -> tuple[list[str]
                     cwd = candidate.resolve()
             except OSError:
                 continue
-        bucket = written if WRITE_HINT.search(call.command) else consulted
-        for token in PATH_TOKEN.findall(call.command):
+        bucket = written if WRITE_HINT.search(shell) else consulted
+        for token in PATH_TOKEN.findall(shell):
             if PATH_NOISE.search(token) or token.startswith("-"):
                 continue
             try:

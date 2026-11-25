@@ -118,11 +118,20 @@ def _private_directory(base: Path, root: Path | None = None) -> None:
     """
     missing: list[Path] = []
     cursor = base
-    while not cursor.exists() and cursor.parent != cursor:
+    while cursor.parent != cursor:
+        if cursor.is_symlink() and not cursor.exists():
+            raise BatonError(f"dangling symlink in handoff path: {cursor}")
+        if cursor.exists() and not cursor.is_dir():
+            raise BatonError(f"handoff path component is not a directory: {cursor}")
+        if cursor.exists():
+            break
         missing.append(cursor)
         cursor = cursor.parent
-    for directory in reversed(missing):
-        directory.mkdir(mode=0o700, exist_ok=True)
+    try:
+        for directory in reversed(missing):
+            directory.mkdir(mode=0o700, exist_ok=True)
+    except OSError as error:
+        raise BatonError(f"could not create handoff directory: {error}") from error
 
     chain = [base]
     if root is not None:
@@ -137,11 +146,14 @@ def _private_directory(base: Path, root: Path | None = None) -> None:
                 cursor = cursor / part
                 chain.append(cursor)
 
-    for directory in chain:
-        info = directory.lstat()
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-            raise BatonError("handoff directory must be owned by the current user and cannot be a symlink")
-        directory.chmod(0o700)
+    try:
+        for directory in chain:
+            info = directory.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+                raise BatonError("handoff directory must be owned by the current user and cannot be a symlink")
+            directory.chmod(0o700)
+    except OSError as error:
+        raise BatonError(f"could not secure handoff directory: {error}") from error
 
 
 def write(
@@ -206,9 +218,14 @@ def resume_command(target: str, document: str, directory: str | None) -> list[st
     reader = READERS.get(target)
     if reader is None:
         raise BatonError(f"unknown harness {target!r} — one of: {', '.join(READERS)}")
-    if shutil.which(reader.CLI) is None:
+    found = shutil.which(reader.CLI)
+    if found is None:
         raise BatonError(f"{reader.CLI} is not on PATH")
-    return reader.resume_command(document, directory)
+    command = reader.resume_command(document, directory)
+    # The launch happens in another cwd; a relative PATH entry could otherwise
+    # resolve to a completely different binary than the one we just checked.
+    command[0] = os.path.abspath(found)
+    return command
 
 
 # --- format canary ---------------------------------------------------------
