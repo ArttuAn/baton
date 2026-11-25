@@ -138,7 +138,10 @@ def _split_shell(lines: list[str]) -> tuple[list[str], int]:
         if opener:
             delimiter = opener.group(1)
             index += 1
-            while index < len(lines) and lines[index].strip() != delimiter:
+            while index < len(lines):
+                tokens = lines[index].strip().split(maxsplit=1)
+                if tokens and tokens[0] == delimiter:
+                    break  # `EOF  # done` is still the closing delimiter
                 hidden += 1
                 index += 1
         index += 1
@@ -243,12 +246,14 @@ def _todos(calls: list[ToolCall]) -> list[dict]:
 def _todo_rows(items) -> list[dict]:
     return [
         {
-            "content": item.get("content")
-            or item.get("task")
-            or item.get("subject")
-            or item.get("description")
-            or "",
-            "status": item.get("status") or "",
+            "content": str(
+                item.get("content")
+                or item.get("task")
+                or item.get("subject")
+                or item.get("description")
+                or ""
+            ),
+            "status": str(item.get("status") or ""),
         }
         for item in items
         if isinstance(item, dict)

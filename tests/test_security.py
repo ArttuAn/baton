@@ -25,6 +25,17 @@ def test_credentials_are_redacted_without_trailing_fragments(text, secret):
     assert 'REDACTED' in redact_text(text)
 
 
+def test_escaped_and_lookalike_secret_keys_are_redacted():
+    assert redact_text('{"pa\\u0073sword": "hunter2"}') == '{"password": "[REDACTED]"}'
+    assert redact_payload({'ａｐｉｋｅｙ': 'hunter2'})['ａｐｉｋｅｙ'] == '[REDACTED]'
+    assert redact_payload({'p\u0430ssword': 'hunter2'})['p\u0430ssword'] == '[REDACTED]'
+
+
+def test_pgp_private_key_block_is_redacted():
+    text = "-----BEGIN PGP PRIVATE KEY BLOCK-----\nABCD\n-----END PGP PRIVATE KEY BLOCK-----"
+    assert redact_text(text) == '[REDACTED PRIVATE KEY]'
+
+
 def test_nested_http_credentials_are_not_exported():
     payload = {'headers': {'Authorization': 'Basic private', 'Cookie': 'session=private'},
                'tools': [{'password': 'spaces and newlines\nprivate'}]}

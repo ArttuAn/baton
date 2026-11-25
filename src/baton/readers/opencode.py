@@ -48,16 +48,20 @@ def _connect() -> sqlite3.Connection | None:
 
 
 def _stamp(millis) -> str | None:
-    if not millis:
+    if not isinstance(millis, (int, float)) or not millis:
         return None
-    return datetime.fromtimestamp(millis / 1000, tz=UTC).isoformat(timespec="seconds")
+    try:
+        return datetime.fromtimestamp(millis / 1000, tz=UTC).isoformat(timespec="seconds")
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _json(raw):
     try:
-        return json.loads(raw)
-    except (TypeError, json.JSONDecodeError):
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
         return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def _rows(db: sqlite3.Connection, query: str, params: tuple) -> list:
@@ -80,17 +84,19 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
     target = str(Path(directory).resolve()) if directory else None
     refs = []
     for sid, sdir, title, updated, count in rows:
+        sdir = sdir if isinstance(sdir, str) else None
+        title = title if isinstance(title, str) else None
         # A session with no directory cannot be attributed to this project — exclude it when filtering.
         if target and (not sdir or str(Path(sdir).resolve()) != target):
             continue
         refs.append(
             SessionRef(
                 harness=NAME,
-                id=sid,
+                id=str(sid),
                 directory=sdir,
                 title=title,
                 updated=_stamp(updated),
-                messages=count,
+                messages=count if isinstance(count, int) else None,
                 source=str(db_path()),
             )
         )
@@ -131,16 +137,19 @@ def load(ref: SessionRef) -> Session:
         for part in parts.get(message_id, []):
             ptype = part.get("type")
             if ptype == "text":
-                texts.append(part.get("text") or "")
+                text = part.get("text") or ""
+                texts.append(text if isinstance(text, str) else str(text))
             elif ptype == "tool":
                 tools.append(_tool_call(part))
         if not texts and not tools:
             continue
+        timing = info.get("time")
+        created = timing.get("created") if isinstance(timing, dict) else None
         session.turns.append(
             Turn(
                 role="user" if role == "user" else "assistant",
                 text="\n".join(t for t in texts if t.strip()).strip(),
-                ts=_stamp((info.get("time") or {}).get("created")),
+                ts=_stamp(created),
                 tools=tools,
                 meta={"synthetic": False},
             )
@@ -162,17 +171,25 @@ def _model_name(raw) -> str | None:
 
 def _tool_call(part: dict) -> ToolCall:
     tool = part.get("tool") or "?"
-    state = part.get("state") or {}
-    args = state.get("input") or {}
+    tool = tool if isinstance(tool, str) else str(tool)
+    state = part.get("state")
+    if not isinstance(state, dict):
+        state = {}
+    args = state.get("input")
+    if not isinstance(args, dict):
+        args = {}
     status = state.get("status")
     path = args.get("filePath") or args.get("file_path") or args.get("path")
+    path = path if isinstance(path, str) else None
     if not path and tool == "apply_patch":
-        path = _patch_path(args.get("patchText") or "")
+        patch = args.get("patchText") or ""
+        path = _patch_path(patch if isinstance(patch, str) else str(patch))
+    command = args.get("command")
     return ToolCall(
         kind=TOOL_KINDS.get(tool, "other"),
         name=tool,
         path=path,
-        command=args.get("command"),
+        command=command if isinstance(command, str) else None,
         ok=None if status in (None, "running", "pending") else status == "completed",
         extra={"todos": args["todos"]} if tool == "todowrite" and args.get("todos") else {},
     )

@@ -168,7 +168,10 @@ def _titles() -> dict[str, str]:
     for line in out.splitlines():
         parts = line.split(None, 3)
         if len(parts) >= 3:
-            titles[_norm(parts[0])] = parts[3] if len(parts) == 4 else ""
+            # A title is untrusted terminal input: it is written back into a pty
+            # at restore time and printed by `baton pick`. Keep control bytes out.
+            title = parts[3] if len(parts) == 4 else ""
+            titles[_norm(parts[0])] = re.sub(r"[\x00-\x1f\x7f]", "", title)
     return titles
 
 
