@@ -24,7 +24,7 @@ def markdown(brief: Brief, *, transcript_path: str | None = None, minimal: bool 
     session = brief.session
     out: list[str] = []
     title = session.ref.title or (brief.asks[0].splitlines()[0] if brief.asks else "Session handoff")
-    out.append(f"# Handoff — {title.strip()[:90]}")
+    out.append(f"# Handoff — {_one_line(title)[:90]}")
     out.append("")
     out.append(HEADER_NOTE)
     out.append("")
@@ -39,6 +39,26 @@ def markdown(brief: Brief, *, transcript_path: str | None = None, minimal: bool 
     out.extend(_next_step(brief, minimal=minimal))
     out.extend(_transcript(brief, transcript_path))
     return "\n".join(out).rstrip() + "\n"
+
+
+def _one_line(value: str) -> str:
+    """Session text is untrusted; keep it from becoming markdown structure."""
+    return " ".join(str(value).split())
+
+
+def _cell(value: str) -> str:
+    """Escape a table cell so a value from a session cannot add columns or rows."""
+    return _one_line(value).replace("\\", "\\\\").replace("|", "\\|")
+
+
+def _fence(*texts: str) -> str:
+    """A code fence longer than any backtick run in the content it must contain."""
+    longest = run = 0
+    for text in texts:
+        for char in text:
+            run = run + 1 if char == "`" else 0
+            longest = max(longest, run)
+    return "`" * max(3, longest + 1)
 
 
 def _facts(brief: Brief, *, minimal: bool = False) -> list[str]:
@@ -57,7 +77,7 @@ def _facts(brief: Brief, *, minimal: bool = False) -> list[str]:
     if brief.stopped_because:
         rows.append(("Stopped because", brief.stopped_because))
     lines = ["| | |", "|---|---|"]
-    lines += [f"| {key} | {value} |" for key, value in rows if value]
+    lines += [f"| {key} | {_cell(value)} |" for key, value in rows if value]
     return lines + [""]
 
 
@@ -83,10 +103,12 @@ def _asks(brief: Brief) -> list[str]:
         "",
     ]
     for index, ask in enumerate(brief.asks, 1):
-        body = ask.strip()
+        body = ask.strip().replace("\r\n", "\n").replace("\r", "\n")
         if len(body) > 700:
             body = body[:700].rstrip() + " […]"
-        out.append(f"{index}. {body}")
+        lines = body.split("\n")
+        out.append(f"{index}. {lines[0]}")
+        out.extend(f"   {line}" for line in lines[1:])
         out.append("")
     return out
 
@@ -116,7 +138,8 @@ def _files(brief: Brief) -> list[str]:
         out += [f"- `{path}`" for path in brief.edited]
         out.append("")
     if brief.workspace.diffstat:
-        out += ["Uncommitted right now:", "", "```", brief.workspace.diffstat, "```", ""]
+        fence = _fence(brief.workspace.diffstat)
+        out += ["Uncommitted right now:", "", fence, brief.workspace.diffstat, fence, ""]
     if brief.workspace.commits:
         out += ["Committed during the session:", ""]
         out += [f"- {line}" for line in brief.workspace.commits]
@@ -131,14 +154,15 @@ def _files(brief: Brief) -> list[str]:
 def _commands(brief: Brief) -> list[str]:
     if not brief.commands:
         return []
+    fence = _fence(*brief.commands)
     return [
         "## Commands it ran",
         "",
         "Newest last. Inline scripts are shown by their first line only.",
         "",
-        "```sh",
+        f"{fence}sh",
         *brief.commands,
-        "```",
+        fence,
         "",
     ]
 
@@ -178,7 +202,8 @@ def _next_step(brief: Brief, *, minimal: bool = False) -> list[str]:
     ]
     verify = _verification(brief)
     if verify:
-        out += ["The previous agent verified its work with:", "", "```sh", verify, "```", ""]
+        fence = _fence(verify)
+        out += ["The previous agent verified its work with:", "", f"{fence}sh", verify, fence, ""]
     return out
 
 

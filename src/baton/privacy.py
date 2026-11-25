@@ -1,14 +1,26 @@
 """Best-effort credential redaction for exported handoffs."""
 
 import re
+import unicodedata
 
 _SECRET_NAME = r"(?:api[_-]?key|client[_-]?secret|password|passwd|secret|token|access[_-]?token|refresh[_-]?token|access[_-]?key|secret[_-]?access[_-]?key|authorization|cookie|private[_-]?key|database[_-]?url|connection[_-]?string)"
 _SECRET_KEY = re.compile(_SECRET_NAME)
+_UNICODE_ESCAPE = re.compile(r"\\u([0-9a-fA-F]{4})")
+# Latin-looking Cyrillic letters that NFKC alone does not fold to ASCII.
+_CONFUSABLES = str.maketrans(
+    {"а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "і": "i", "ѕ": "s", "һ": "h"}
+)
+
+
+def _key_name(key) -> str:
+    normalized = unicodedata.normalize("NFKC", str(key).lower()).translate(_CONFUSABLES)
+    return re.sub(r"[^a-z0-9]", "", normalized)
 
 _PATTERNS = [
     (
         re.compile(
-            r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z]+ )?PRIVATE KEY-----", re.DOTALL
+            r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----.*?-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----",
+            re.DOTALL,
         ),
         "[REDACTED PRIVATE KEY]",
     ),
@@ -37,6 +49,9 @@ _PATTERNS = [
 
 
 def redact_text(text: str) -> str:
+    # Tool output often carries JSON with escaped key names; decode them so the
+    # secret-name patterns still see a readable key.
+    text = _UNICODE_ESCAPE.sub(lambda match: chr(int(match.group(1), 16)), text)
     for pattern, replacement in _PATTERNS:
         text = pattern.sub(replacement, text)
     # Session titles and tool output can contain terminal escape sequences.
@@ -54,7 +69,7 @@ def redact_payload(value):
         # x-api-key, auth-token or passwd cannot slip through a hand-maintained list.
         return {
             key: "[REDACTED]"
-            if _SECRET_KEY.search(re.sub(r"[^a-z0-9]", "", str(key).lower()))
+            if _SECRET_KEY.search(_key_name(key))
             else redact_payload(item)
             for key, item in value.items()
         }

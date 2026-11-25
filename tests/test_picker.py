@@ -18,6 +18,13 @@ def test_titles_keep_every_word_and_normalise_the_window_id(monkeypatch):
     assert picker._norm("0x046b5fad") == "0x46b5fad"
 
 
+def test_titles_strip_terminal_control_bytes(monkeypatch):
+    hostile = "0x046aa60a  0 Arttus bad\x1b[2J\x07title\n"
+    done = subprocess.CompletedProcess([], 0, stdout=hostile)
+    monkeypatch.setattr(picker.subprocess, "run", lambda *a, **k: done)
+    assert picker._titles()["0x46aa60a"] == "bad[2Jtitle"
+
+
 def test_a_probed_window_maps_to_the_pid_that_retitled_it(monkeypatch):
     done = subprocess.CompletedProcess([], 0, stdout=WMCTRL)
     monkeypatch.setattr(picker.subprocess, "run", lambda *a, **k: done)

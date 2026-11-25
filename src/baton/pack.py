@@ -63,9 +63,9 @@ def pick(directory: str, harness: str | None = None, session_id: str | None = No
     refs = sessions_for(directory, [harness] if harness else None)
     if session_id:
         for ref in refs:
-            if ref.id == session_id:
+            if str(ref.id) == session_id:
                 return ref
-        matches = [ref for ref in refs if ref.id.startswith(session_id)]
+        matches = [ref for ref in refs if str(ref.id).startswith(session_id)]
         if len(matches) == 1:
             return matches[0]
         if matches:
@@ -122,7 +122,7 @@ def _private_directory(base: Path, root: Path | None = None) -> None:
         missing.append(cursor)
         cursor = cursor.parent
     for directory in reversed(missing):
-        directory.mkdir(mode=0o700)
+        directory.mkdir(mode=0o700, exist_ok=True)
 
     chain = [base]
     if root is not None:
@@ -161,18 +161,23 @@ def write(
     slug = f"handoff-{brief.session.harness}-{stamp}-{uuid.uuid4().hex[:8]}"
     transcript = base / f"{slug}.transcript.json"
     document = base / f"{slug}.md"
+    latest = base / "latest.md"
+    if latest.is_dir() and not latest.is_symlink():
+        raise BatonError(f"cannot replace {latest}: it is a directory")
 
     _private_write(transcript, json.dumps(redact_payload(_transcript_payload(brief.session)), indent=1))
     _private_write(
         document, redact_text(render.markdown(brief, transcript_path=str(transcript), minimal=minimal))
     )
-    latest = base / "latest.md"
     try:
         if latest.is_symlink() or latest.exists():
             latest.unlink()
         latest.symlink_to(document.name)
     except OSError:
-        _private_write(latest, document.read_text())
+        try:
+            _private_write(latest, document.read_text())
+        except OSError as error:
+            raise BatonError(f"could not update {latest}: {error}") from error
     return {"document": str(document), "transcript": str(transcript), "latest": str(latest)}
 
 

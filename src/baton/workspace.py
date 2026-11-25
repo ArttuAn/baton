@@ -23,11 +23,12 @@ def _git(directory: str, *args: str) -> str | None:
         done = subprocess.run(
             ["git", "-C", directory, *args],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, UnicodeError, subprocess.SubprocessError):
         return None
     if done.returncode != 0:
         return None

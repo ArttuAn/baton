@@ -57,13 +57,14 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
             head = _peek(file)
             if head is None:
                 continue
-            if directory and (not head.get("cwd") or Path(head["cwd"]).resolve() != Path(directory).resolve()):
+            cwd = head.get("cwd")
+            if directory and (not cwd or Path(cwd).resolve() != Path(directory).resolve()):
                 continue
             refs.append(
                 SessionRef(
                     harness=NAME,
                     id=file.stem,
-                    directory=head.get("cwd"),
+                    directory=cwd,
                     title=head.get("title"),
                     updated=_stamp(file.stat().st_mtime),
                     messages=head.get("messages"),
@@ -84,14 +85,18 @@ def _peek(file: Path) -> dict | None:
                     continue
                 try:
                     entry = json.loads(line)
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, ValueError):
                     continue
-                cwd = cwd or entry.get("cwd")
+                if not isinstance(entry, dict):
+                    continue
+                found = entry.get("cwd")
+                cwd = cwd or (found if isinstance(found, str) else None)
                 if entry.get("type") == "ai-title":
-                    title = title or entry.get("title") or entry.get("aiTitle")
+                    found = entry.get("title") or entry.get("aiTitle")
+                    title = title or (found if isinstance(found, str) else None)
                 if entry.get("type") in ("user", "assistant"):
                     messages += 1
-    except OSError:
+    except (OSError, ValueError):
         return None
     if cwd is None and messages == 0:
         return None
@@ -101,7 +106,9 @@ def _peek(file: Path) -> dict | None:
 def _blocks(content) -> list[dict]:
     if isinstance(content, str):
         return [{"type": "text", "text": content}]
-    return [block for block in (content or []) if isinstance(block, dict)]
+    if not isinstance(content, (list, tuple)):
+        return []
+    return [block for block in content if isinstance(block, dict)]
 
 
 def _is_injected(text: str) -> bool:
@@ -116,16 +123,23 @@ def load(ref: SessionRef) -> Session:
     for line in Path(ref.source).read_text(errors="replace").splitlines():
         try:
             entry = json.loads(line)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(entry, dict):
             continue
         kind = entry.get("type")
         if kind == "system" and entry.get("subtype") == "error":
             session.error = str(entry.get("content"))[:400]
         if kind not in ("user", "assistant"):
             continue
-        message = entry.get("message") or {}
+        message = entry.get("message")
+        if not isinstance(message, dict):
+            message = {}
         ts = entry.get("timestamp")
-        session.model = session.model or message.get("model")
+        if not isinstance(ts, str):
+            ts = None
+        model = message.get("model")
+        session.model = session.model or (model if isinstance(model, str) else None)
         session.started = session.started or ts
         if ts:
             session.ended = ts
@@ -137,6 +151,7 @@ def load(ref: SessionRef) -> Session:
             btype = block.get("type")
             if btype == "text":
                 text = block.get("text") or ""
+                text = text if isinstance(text, str) else str(text)
                 if kind == "user" and _is_injected(text):
                     continue
                 texts.append(text)
@@ -144,13 +159,14 @@ def load(ref: SessionRef) -> Session:
                     synthetic = False
             elif btype == "tool_use":
                 tools.append(_tool_call(block))
-                pending[block.get("id") or ""] = tools[-1]
+                pending[str(block.get("id") or "")] = tools[-1]
             elif btype == "tool_result":
-                call = pending.get(block.get("tool_use_id") or "")
+                call = pending.get(str(block.get("tool_use_id") or ""))
                 if call is not None:
                     call.ok = not block.get("is_error")
 
-        if kind == "user" and entry.get("origin", {}).get("kind") == "human":
+        origin = entry.get("origin")
+        if kind == "user" and isinstance(origin, dict) and origin.get("kind") == "human":
             synthetic = False
         if not texts and not tools:
             continue

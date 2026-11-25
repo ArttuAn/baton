@@ -62,17 +62,19 @@ def list_sessions(directory: str | None = None) -> list[SessionRef]:
     target = str(Path(directory).resolve()) if directory else None
     refs = []
     for sid, cwd, title, updated, count in rows:
+        cwd = cwd if isinstance(cwd, str) else None
+        title = title if isinstance(title, str) else None
         # A session with no cwd cannot be attributed to this project — exclude it when filtering.
         if target and (not cwd or str(Path(cwd).resolve()) != target):
             continue
         refs.append(
             SessionRef(
                 harness=NAME,
-                id=sid,
+                id=str(sid),
                 directory=cwd,
                 title=title,
                 updated=_stamp(updated),
-                messages=count,
+                messages=count if isinstance(count, int) else None,
                 source=str(db_path()),
             )
         )
@@ -89,11 +91,13 @@ def load(ref: SessionRef) -> Session:
             "select model, started_at, last_activity_at, end_reason from sessions where id = ?", (ref.id,)
         ).fetchone()
         if row:
+            model = row[0] if isinstance(row[0], str) else None
+            error = row[3] if isinstance(row[3], str) else None
             session.model, session.started, session.ended, session.error = (
-                row[0],
+                model,
                 _stamp(row[1]),
                 _stamp(row[2]),
-                row[3],
+                error,
             )
         rows = db.execute(
             "select role, content, tool_calls, tool_name, timestamp from messages"
@@ -105,7 +109,8 @@ def load(ref: SessionRef) -> Session:
         if role not in ("user", "assistant"):
             continue
         tools = _tool_calls(tool_calls, tool_name)
-        text = (content or "").strip()
+        content = content if isinstance(content, str) else str(content or "")
+        text = content.strip()
         if not text and not tools:
             continue
         session.turns.append(
@@ -119,29 +124,37 @@ def _tool_calls(raw, fallback_name) -> list[ToolCall]:
         return []
     try:
         parsed = json.loads(raw)
-    except (TypeError, json.JSONDecodeError):
+    except (TypeError, ValueError):
         return []
     if isinstance(parsed, dict):
         parsed = [parsed]
+    if not isinstance(parsed, list):
+        return []
     calls = []
-    for item in parsed or []:
+    for item in parsed:
         if not isinstance(item, dict):
             continue
         function = item.get("function") or item
+        if not isinstance(function, dict):
+            continue
         name = function.get("name") or fallback_name or "?"
+        name = name if isinstance(name, str) else str(name)
         args = function.get("arguments")
         if isinstance(args, str):
             try:
                 args = json.loads(args)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, ValueError):
                 args = {}
-        args = args or {}
+        if not isinstance(args, dict):
+            args = {}
+        path = args.get("path") or args.get("file_path")
+        command = args.get("command")
         calls.append(
             ToolCall(
                 kind=TOOL_KINDS.get(name, "other"),
                 name=name,
-                path=args.get("path") or args.get("file_path"),
-                command=args.get("command"),
+                path=path if isinstance(path, str) else None,
+                command=command if isinstance(command, str) else None,
             )
         )
     return calls
