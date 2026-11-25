@@ -44,6 +44,10 @@ def _stamp(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, tz=UTC).isoformat(timespec="seconds")
 
 
+def _string(value) -> str | None:
+    return value if isinstance(value, str) else None
+
+
 def list_sessions(directory: str | None = None) -> list[SessionRef]:
     base = root()
     if not base.is_dir():
@@ -184,7 +188,10 @@ def load(ref: SessionRef) -> Session:
 
 def _tool_call(block: dict) -> ToolCall:
     name = block.get("name") or "?"
-    args = block.get("input") or {}
+    name = name if isinstance(name, str) else str(name)
+    args = block.get("input")
+    if not isinstance(args, dict):
+        args = {}
     extra = {}
     if name == "TodoWrite" and args.get("todos"):
         extra["todos"] = args["todos"]
@@ -199,8 +206,8 @@ def _tool_call(block: dict) -> ToolCall:
     return ToolCall(
         kind=TOOL_KINDS.get(name, "other"),
         name=name,
-        path=args.get("file_path") or args.get("path") or args.get("notebook_path"),
-        command=args.get("command"),
+        path=_string(args.get("file_path") or args.get("path") or args.get("notebook_path")),
+        command=_string(args.get("command")),
         extra=extra,
     )
 

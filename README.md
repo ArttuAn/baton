@@ -16,7 +16,7 @@
   <img alt="Zero dependencies" src="https://img.shields.io/badge/runtime-zero%20dependencies-1f2937">
   <img alt="No model calls" src="https://img.shields.io/badge/model%20calls-none-16a34a?logo=ghostery&logoColor=white">
   <img alt="Offline" src="https://img.shields.io/badge/network-offline%20capable-0ea5e9?logo=wifi&logoColor=white">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-90%20passing-16a34a?logo=pytest&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-105%20passing-16a34a?logo=pytest&logoColor=white">
   <img alt="Lint" src="https://img.shields.io/badge/ruff-clean-261230?logo=ruff&logoColor=white">
   <img alt="Harnesses" src="https://img.shields.io/badge/harnesses-4-7c3aed">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
@@ -205,7 +205,7 @@ Everything downstream of `readers/` works on one normalized `Session`.
 ## 🧪 Develop
 
 ```sh
-.venv/bin/python -m pytest -q     # 90 tests
+.venv/bin/python -m pytest -q     # 105 tests
 .venv/bin/ruff check .            # clean
 ```
 

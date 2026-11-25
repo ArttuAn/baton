@@ -22,7 +22,16 @@ def test_titles_strip_terminal_control_bytes(monkeypatch):
     hostile = "0x046aa60a  0 Arttus bad\x1b[2J\x07title\n"
     done = subprocess.CompletedProcess([], 0, stdout=hostile)
     monkeypatch.setattr(picker.subprocess, "run", lambda *a, **k: done)
-    assert picker._titles()["0x46aa60a"] == "bad[2Jtitle"
+    assert picker._titles()["0x46aa60a"] == r"bad\u001b[2J\u0007title"
+
+
+def test_titles_inert_bidi_and_c1_controls(monkeypatch):
+    hostile = "0x046aa60a  0 Arttus \u202e\u2066abc\u2069\u009b\n"
+    done = subprocess.CompletedProcess([], 0, stdout=hostile)
+    monkeypatch.setattr(picker.subprocess, "run", lambda *a, **k: done)
+    title = picker._titles()["0x46aa60a"]
+    assert "\u202e" not in title and "\u2066" not in title and "\u009b" not in title
+    assert "abc" in title
 
 
 def test_a_probed_window_maps_to_the_pid_that_retitled_it(monkeypatch):

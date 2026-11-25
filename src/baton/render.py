@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .brief import Brief
 
 HEADER_NOTE = (
@@ -51,6 +53,15 @@ def _cell(value: str) -> str:
     return _one_line(value).replace("\\", "\\\\").replace("|", "\\|")
 
 
+def _inline(value: str) -> str:
+    """An inline code span that cannot be closed by untrusted text."""
+    text = _one_line(value)
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    fence = "`" * (longest + 1)
+    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
 def _fence(*texts: str) -> str:
     """A code fence longer than any backtick run in the content it must contain."""
     longest = run = 0
@@ -70,7 +81,7 @@ def _facts(brief: Brief, *, minimal: bool = False) -> list[str]:
     ]
     if not minimal:
         rows += [
-            ("Source session", f"`{session.ref.id}`"),
+            ("Source session", _inline(session.ref.id)),
             ("Session ran", f"{session.started or '?'} → {session.ended or '?'}"),
             ("Turns", str(len(session.turns))),
         ]
@@ -85,7 +96,7 @@ def _git_line(brief: Brief) -> str | None:
     workspace = brief.workspace
     if not workspace.is_git:
         return "not a git repository"
-    parts = [f"`{workspace.branch}`"]
+    parts = [_inline(workspace.branch or "?")]
     if workspace.head:
         parts.append(f"at {workspace.head}")
     if workspace.dirty:
@@ -135,7 +146,7 @@ def _files(brief: Brief) -> list[str]:
     out: list[str] = []
     if brief.edited:
         out += ["## Files this session changed", ""]
-        out += [f"- `{path}`" for path in brief.edited]
+        out += [f"- {_inline(path)}" for path in brief.edited]
         out.append("")
     if brief.workspace.diffstat:
         fence = _fence(brief.workspace.diffstat)
@@ -146,7 +157,7 @@ def _files(brief: Brief) -> list[str]:
         out.append("")
     if brief.read:
         out += ["<details><summary>Files it only read (context, not changes)</summary>", ""]
-        out += [f"- `{path}`" for path in brief.read]
+        out += [f"- {_inline(path)}" for path in brief.read]
         out += ["", "</details>", ""]
     return out
 
@@ -175,7 +186,7 @@ def _failures(brief: Brief) -> list[str]:
         "",
         "Do not walk into these again without reading why they failed:",
         "",
-        *[f"- `{line[:160]}`" for line in brief.failures],
+        *[f"- {_inline(line[:160])}" for line in brief.failures],
         "",
     ]
 
@@ -222,7 +233,7 @@ def _transcript(brief: Brief, transcript_path: str | None) -> list[str]:
     return [
         "## The full transcript",
         "",
-        f"Every turn of the old session, normalized: `{transcript_path}`",
+        f"Every turn of the old session, normalized: {_inline(transcript_path)}",
         "",
         (
             "Grep it when this summary is not enough. It is JSON: "

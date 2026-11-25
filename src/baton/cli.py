@@ -11,7 +11,7 @@ from pathlib import Path
 
 from . import install, pack, picker
 from .pack import BatonError
-from .privacy import redact_text
+from .privacy import redact_text, safe_text
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,7 +91,10 @@ def _apply_pick(args) -> None:
         return
     chosen = picker.pick()
     print(
-        f"picked: {chosen.harness} pid {chosen.pid} · {chosen.title!r} · {chosen.directory}", file=sys.stderr
+        safe_text(
+            f"picked: {chosen.harness} pid {chosen.pid} · {chosen.title!r} · {chosen.directory}"
+        ),
+        file=sys.stderr,
     )
     args.harness, args.session, args.dir = chosen.harness, chosen.session_id, chosen.directory
 
@@ -101,7 +104,10 @@ def cmd_pick(args) -> int:
         raise BatonError("--timeout must be a positive integer")
     chosen = picker.pick(args.timeout)
     print(
-        f"{chosen.harness} {chosen.session_id or '?'} {chosen.directory}  # pid {chosen.pid} · {chosen.title}"
+        safe_text(
+            f"{chosen.harness} {chosen.session_id or '?'} {chosen.directory}  "
+            f"# pid {chosen.pid} · {chosen.title}"
+        )
     )
     return 0
 
@@ -124,7 +130,7 @@ def cmd_doctor(args) -> int:
         elif check["problems"]:
             drifted = True
             for problem in check["problems"]:
-                print(f"{'':<9} \u26a0 {problem}")
+                print(safe_text(f"{'':<9} \u26a0 {problem}"))
         else:
             signals = check["signals"]
             print(
@@ -147,7 +153,7 @@ def cmd_sessions(args) -> int:
         raise BatonError("--limit must be a positive integer")
     refs = pack.sessions_for(args.dir)[: args.limit]
     if not refs:
-        print(f"no sessions recorded for {args.dir}")
+        print(safe_text(f"no sessions recorded for {args.dir}"))
         return 0
     for ref in refs:
         title = redact_text(ref.title or "").strip().replace("\n", " ")[:52]
@@ -158,7 +164,7 @@ def cmd_sessions(args) -> int:
 
 def cmd_pack(args) -> int:
     paths, brief = _do_pack(args)
-    print(paths["document"])
+    print(safe_text(paths["document"]))
     if brief.is_thin():
         print("baton: warning — that session has almost nothing in it", file=sys.stderr)
     return 0
@@ -173,7 +179,7 @@ def _do_pack(args):
 
 def cmd_install(args) -> int:
     for harness, outcome, detail in install.install():
-        print(f"{harness:<9} {outcome:<15} {detail}")
+        print(safe_text(f"{harness:<9} {outcome:<15} {detail}"))
     print("\nRestart any harness that was already running, then just say what happened:")
     print('  "the session died with opencode, continue where I left off"')
     return 0
@@ -185,7 +191,7 @@ def cmd_continue(args) -> int:
     ref = pack.pick(args.dir, args.harness, args.session)
     brief, _ = pack.build(ref, args.dir)
     paths = pack.write(brief, args.dir, args.out, minimal=args.minimal)
-    print(f"<!-- baton: {ref.harness} session {ref.id} · saved to {paths['document']} -->")
+    print(safe_text(f"<!-- baton: {ref.harness} session {ref.id} · saved to {paths['document']} -->"))
     print(Path(paths["document"]).read_text())
     if brief.is_thin():
         print("baton: warning — that session has almost nothing in it", file=sys.stderr)
@@ -195,14 +201,18 @@ def cmd_continue(args) -> int:
 def cmd_resume(args) -> int:
     document = args.pack or str(pack.default_out_dir(args.dir) / "latest.md")
     if not os.path.exists(document):
-        raise BatonError(f"no handoff at {document} — run `baton pack` first")
+        raise BatonError(f"no handoff at {safe_text(document)} — run `baton pack` first")
     return _launch(pack.resume_command(args.target, os.path.abspath(document), args.dir), args)
 
 
 def cmd_handoff(args) -> int:
+    # Validate the target before writing anything, so a typo does not leave a
+    # handoff behind and claim success.
+    pack.resume_command(args.target, "handoff.md", args.dir)
     paths, _ = _do_pack(args)
-    print(f"handoff written: {paths['document']}")
-    return _launch(pack.resume_command(args.target, paths["document"], args.dir), args)
+    command = pack.resume_command(args.target, paths["document"], args.dir)
+    print(safe_text(f"handoff written: {paths['document']}"))
+    return _launch(command, args)
 
 
 def _launch(command: list[str], args) -> int:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -56,18 +57,21 @@ def _meta(file: Path) -> dict | None:
     try:
         with file.open() as handle:
             for line in handle:
-                entry = json.loads(line)
+                try:
+                    entry = json.loads(line)
+                except ValueError:
+                    continue
                 if isinstance(entry, dict) and entry.get("type") == "session_meta":
                     payload = entry.get("payload")
                     return payload if isinstance(payload, dict) else {}
-                break
-    except (OSError, ValueError):
+    except OSError:
         return None
     return None
 
 
 def load(ref: SessionRef) -> Session:
     session = Session(ref=ref)
+    pending: dict[str, ToolCall] = {}
     for line in Path(ref.source).read_text(errors="replace").splitlines():
         try:
             entry = json.loads(line)
@@ -109,10 +113,23 @@ def load(ref: SessionRef) -> Session:
             session.turns.append(Turn(role=role, text=text, ts=ts, meta={"synthetic": False}))
         elif ptype in ("function_call", "local_shell_call"):
             call = _tool_call(payload)
+            call_id = payload.get("call_id")
+            if isinstance(call_id, str):
+                pending[call_id] = call
             if session.turns and session.turns[-1].role == "assistant":
                 session.turns[-1].tools.append(call)
             else:
                 session.turns.append(Turn(role="assistant", ts=ts, tools=[call]))
+        elif ptype == "function_call_output":
+            call_id = payload.get("call_id")
+            call = pending.get(call_id) if isinstance(call_id, str) else None
+            if call is not None:
+                output = payload.get("output")
+                text = output if isinstance(output, str) else json.dumps(output)
+                failed = bool(payload.get("is_error")) or bool(
+                    re.search(r"(?i)\b(?:failed|error|denied|timed out)\b", text)
+                )
+                call.ok = not failed
     return session
 
 
