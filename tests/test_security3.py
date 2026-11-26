@@ -34,6 +34,21 @@ def test_common_credential_formats_are_redacted():
     assert gitlab not in redact_text(f"key: {gitlab}")
 
 
+def test_encoded_secret_keys_are_decoded_before_matching():
+    assert redact_text(r'{"pa\U00000073sword": "hunter2"}') == '{"password": "[REDACTED]"}'
+    assert "hunter2" not in redact_text("password%3A%20hunter2")
+    assert "unter2" not in redact_text("password: &#104;unter2")
+
+
+def test_error_messages_cannot_inject_terminal_escapes(monkeypatch, capsys):
+    def explode(args):
+        raise pack.BatonError("ambiguous session 's\x1b]52;c;c2VjcmV0\x07'")
+
+    monkeypatch.setattr(cli, "cmd_sessions", lambda args: explode(args))
+    assert cli.main(["sessions"]) == 2
+    assert "\x1b" not in capsys.readouterr().err
+
+
 def test_surrogate_escapes_stay_encoded(tmp_path):
     text = redact_text("emoji \\ud800and\\udc00")
     assert "\\ud800" in text and "\ud800" not in text

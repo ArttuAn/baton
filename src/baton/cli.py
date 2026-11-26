@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except BatonError as error:
-        print(f"baton: {error}", file=sys.stderr)
+        print(f"baton: {safe_text(error)}", file=sys.stderr)
         return 2
 
 
