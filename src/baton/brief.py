@@ -28,7 +28,11 @@ NOISE = re.compile(r"^(cd |ls |pwd|echo |cat |git status|git diff|git log|which 
 
 # A path-ish token inside a shell command: many sessions edit files through
 # heredocs and sed rather than the harness's own edit tool.
-PATH_TOKEN = re.compile(r"[~\w./@-]*[\w-]+\.[A-Za-z][\w]{0,5}")
+# Two overlapping quantifiers in one pattern (e.g. `[~\w./@-]*[\w-]+`) make
+# matching a long dot-less command exponential. Tokenize linearly, then check
+# for a file extension separately.
+PATH_TOKEN = re.compile(r"[~\w./@-]+")
+PATH_EXTENSION = re.compile(r"\.[A-Za-z][\w]{0,5}\Z")
 PATH_NOISE = re.compile(r"node_modules|/\.git/|\.lock$|^https?://|\.bak$|^/tmp/|/scratchpad/")
 
 # `cd somewhere && …` — relative paths in later commands hang off this.
@@ -61,7 +65,33 @@ class Brief:
         return not self.asks and not self.edited and not self.commands
 
 
+def _text(value) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _normalize(session: Session) -> None:
+    """Last line of defence: no store value may crash a handoff build."""
+    session.ref.id = session.ref.id if isinstance(session.ref.id, str) else str(session.ref.id)
+    session.ref.title = _text(session.ref.title)
+    session.model = _text(session.model)
+    session.error = _text(session.error)
+    for turn in session.turns:
+        turn.role = turn.role if isinstance(turn.role, str) else ""
+        turn.text = turn.text if isinstance(turn.text, str) else ""
+        turn.ts = _text(turn.ts)
+        for call in turn.tools:
+            call.kind = call.kind if isinstance(call.kind, str) else "other"
+            call.name = call.name if isinstance(call.name, str) else "?"
+            call.path = _text(call.path)
+            call.command = _text(call.command)
+            if not isinstance(call.extra, dict):
+                call.extra = {}
+            todos = call.extra.get("todos")
+            call.extra["todos"] = todos if isinstance(todos, list) else []
+
+
 def build(session: Session, workspace: Workspace, *, max_commands: int = 25, tail: int = 1600) -> Brief:
+    _normalize(session)
     brief = Brief(session=session, workspace=workspace)
     brief.asks = [turn.text.strip() for turn in session.human_prompts()]
     calls = session.tool_calls()
@@ -225,6 +255,8 @@ def _mined_paths(calls: list[ToolCall], workspace: Workspace) -> tuple[list[str]
                 continue
         bucket = written if WRITE_HINT.search(shell) else consulted
         for token in PATH_TOKEN.findall(shell):
+            if not PATH_EXTENSION.search(token):
+                continue
             if PATH_NOISE.search(token) or token.startswith("-"):
                 continue
             try:
