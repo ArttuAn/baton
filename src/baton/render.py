@@ -137,7 +137,7 @@ def _plan(brief: Brief) -> list[str]:
     out = ["## The plan it was working through", ""]
     for item in brief.todos:
         mark = {"completed": "x", "in_progress": "~"}.get(item["status"], " ")
-        out.append(f"- [{mark}] {item['content']}")
+        out.append(f"- [{mark}] {_inline(item['content'])}")
     out.append("")
     return out
 

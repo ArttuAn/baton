@@ -189,6 +189,55 @@ def test_inline_code_values_cannot_inject_a_heading(tmp_path):
     assert "\n## INJECTED HEADING" not in render.markdown(handoff)
 
 
+def test_identifier_hidden_secret_names_and_webhooks_are_redacted():
+    for text, secret in [
+        ("aws_secret_access_key=hunter2", "hunter2"),
+        ("_authToken=hunter2", "hunter2"),
+        ("DATABASE_PASSWORD=hunter2", "hunter2"),
+        ('"api-key": |\n  hunter2\n  second\n', "hunter2"),
+        ("https://hooks.slack.com/services/" + "T" * 8 + "/" + "B" * 8 + "/" + "x" * 24, "x" * 24),
+        ("https://discord.com/api/webhooks/123/" + "y" * 24, "y" * 24),
+    ]:
+        assert secret not in redact_text(text)
+
+
+def test_cli_flag_and_jwt_variants_are_redacted():
+    assert "Sup3rSecret" not in redact_text("curl -u admin:Sup3rSecret http://host")
+    assert "Sup3rSecret" not in redact_text("mysql -pSup3rSecret db")
+    assert "Sup3rSecret" not in redact_text("redis-cli -a Sup3rSecret")
+    assert "Sup3rSecret" not in redact_text("sshpass -pSup3rSecret ssh host")
+    jwt = "e30.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    assert jwt not in redact_text(jwt)
+
+
+def test_credential_material_in_payload_keys_is_neutralized():
+    token = "sk_live_" + "abcdefghijklmnopqrstuvwxyz"
+    payload = {"Authorization: Bearer " + token: "value"}
+    assert token not in json.dumps(redact_payload(payload))
+
+
+def test_todo_content_cannot_inject_a_fake_section():
+    session = Session(
+        ref=SessionRef("claude", "s1", "/p"),
+        turns=[
+            Turn(
+                role="assistant",
+                tools=[
+                    ToolCall(
+                        kind="task",
+                        name="TodoWrite",
+                        extra={"todos": [{"content": "ok\n## FAKE SECTION\n<div>x</div>", "status": "pending"}]},
+                    )
+                ],
+            )
+        ],
+    )
+    handoff = build(session, Workspace(directory="/p"))
+    rendered = render.markdown(handoff)
+    assert "\n## FAKE SECTION" not in rendered
+    assert "\n<div>" not in rendered
+
+
 def test_picker_ignores_malformed_pid_records(monkeypatch, tmp_path):
     pid = os.getpid()
     (tmp_path / f"{pid}.json").write_text(json.dumps({"sessionId": {"bad": True}, "cwd": ["x"]}))
