@@ -6,6 +6,9 @@ import unicodedata
 _SECRET_NAME = r"(?:api[_-]?key|client[_-]?secret|password|passwd|secret|token|access[_-]?token|refresh[_-]?token|access[_-]?key|secret[_-]?access[_-]?key|authorization|cookie|private[_-]?key|database[_-]?url|connection[_-]?string)"
 _SECRET_KEY = re.compile(_SECRET_NAME)
 _UNICODE_ESCAPE = re.compile(r"\\u([0-9a-fA-F]{4})")
+_UNICODE32_ESCAPE = re.compile(r"\\U([0-9a-fA-F]{8})")
+_HTML_ENTITY = re.compile(r"&#(?:x([0-9a-fA-F]+)|(\d+));")
+_PERCENT_ESCAPE = {"%3A": ":", "%3D": "=", "%20": " ", "%22": '"'}
 # Latin-looking Cyrillic letters that NFKC alone does not fold to ASCII.
 _CONFUSABLES = str.maketrans(
     {"а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "і": "i", "ѕ": "s", "һ": "h"}
@@ -59,19 +62,30 @@ _PATTERNS = [
 ]
 
 
-def _decode_escape(match: re.Match) -> str:
-    codepoint = int(match.group(1), 16)
+def _decoded_char(codepoint: int, original: str) -> str:
     # Lone surrogates are not valid UTF-8 and would abort an export.
-    if 0xD800 <= codepoint <= 0xDFFF:
-        return match.group(0)
+    if 0xD800 <= codepoint <= 0xDFFF or codepoint > 0x10FFFF:
+        return original
     return chr(codepoint)
 
 
+def _decode_escape(match: re.Match) -> str:
+    return _decoded_char(int(match.group(1), 16), match.group(0))
+
+
+def _decode_entity(match: re.Match) -> str:
+    digits = match.group(1) or match.group(2)
+    return _decoded_char(int(digits, 16 if match.group(1) else 10), match.group(0))
+
+
 def redact_text(text: str) -> str:
-    # Tool output often carries JSON with escaped key names; decode them so the
-    # secret-name patterns still see a readable key. Escaped quotes hide
-    # assignments inside JSON strings for the same reason.
+    # Tool output carries several encodings of the same assignment. Decode the
+    # harmless ones before matching so a key or value cannot hide behind them.
     text = _UNICODE_ESCAPE.sub(_decode_escape, text)
+    text = _UNICODE32_ESCAPE.sub(_decode_escape, text)
+    text = _HTML_ENTITY.sub(_decode_entity, text)
+    text = re.sub(r"%3[aAdD]|%20|%22", lambda m: _PERCENT_ESCAPE[m.group(0).upper()], text)
+    # Escaped quotes hide assignments inside JSON strings for the same reason.
     text = re.sub(r'\\(["/])', r"\1", text)
     for pattern, replacement in _PATTERNS:
         text = pattern.sub(replacement, text)
